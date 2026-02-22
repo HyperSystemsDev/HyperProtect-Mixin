@@ -1,14 +1,27 @@
 # Feature Detection
 
-## Interceptor Loaded Properties
+## System Properties
 
-Each interceptor class sets a system property on load. Check these to determine which protections are active:
+Each mixin interceptor sets system properties on load. These are also pre-declared by the plugin entry point during `setup()` so consumer mods can detect features immediately.
+
+### Core Properties
+
+| Property | Purpose |
+|----------|---------|
+| `hyperprotect.bridge.active` | Bridge initialized (`"true"` when loaded) |
+| `hyperprotect.bridge.version` | Bridge version (e.g., `"1.0.0"`) |
+| `hyperprotect.mode` | `"standalone"` or `"compatible"` (when OrbisGuard-Mixins detected) |
+
+### Per-Interceptor Properties
+
+Properties are organized by the mixin class that sets them. In standalone mode, all properties are set. In compatible mode (OrbisGuard detected), only properties from the 5 unique HP mixins are pre-declared.
+
+#### Standalone Interceptors (dedicated mixin classes)
 
 | Property | Interceptor Class | Hook Slot |
 |----------|-------------------|-----------|
-| `hyperprotect.bridge.active` | Plugin entry point | — |
 | `hyperprotect.intercept.block_break` | HarvestInterceptor | `block_break` (0) |
-| `hyperprotect.intercept.explosion` | BlastDamageInterceptor | `explosion` (1) |
+| `hyperprotect.intercept.explosion` | ExplosionInterceptor | `explosion` (1) |
 | `hyperprotect.intercept.fire_spread` | FlameTickInterceptor | `fire_spread` (2) |
 | `hyperprotect.intercept.builder_tools` | PasteInterceptor | `builder_tools` (3) |
 | `hyperprotect.intercept.item_pickup` | ProximityLootInterceptor | `item_pickup` (4) |
@@ -20,24 +33,51 @@ Each interceptor class sets a system property on load. Check these to determine 
 | `hyperprotect.intercept.world_spawn` | ChunkSpawnGate | `mob_spawn` (8) |
 | `hyperprotect.intercept.npc_spawn` | NpcAdditionGate | `mob_spawn` (8) |
 | `hyperprotect.intercept.entity_load` | EntityLoadGate | `mob_spawn` (8) |
-| `hyperprotect.intercept.teleporter` | TelepadInterceptor | `teleporter` (9) |
-| `hyperprotect.intercept.portal_entry` | PortalGateEntry | `portal` (10) |
-| `hyperprotect.intercept.portal_return` | PortalGateReturn | `portal` (10) |
-| `hyperprotect.intercept.instance_config` | InstanceConfigGate | `portal` (10) |
-| `hyperprotect.intercept.instance_teleport` | InstanceJumpGate | `portal` (10) |
-| `hyperprotect.intercept.instance_exit` | InstanceLeaveGate | `portal` (10) |
-| `hyperprotect.intercept.hub_portal` | HubGate | `portal` (10) |
 | `hyperprotect.intercept.command` | CommandGateInterceptor | `command` (11) |
 | `hyperprotect.intercept.interaction_log` | SpawnLogFilter | `interaction_log` (12) |
 | `hyperprotect.intercept.interaction_entry_desync` | EntryDesyncFilter | `interaction_log` (12) |
 | `hyperprotect.intercept.interaction_chain_desync` | ChainDesyncFilter | `interaction_log` (12) |
 | `hyperprotect.intercept.entity_damage` | EntityDamageInterceptor | `entity_damage` (16) |
-| `hyperprotect.intercept.container_open` | ContainerOpenInterceptor | `container_open` (17) |
 | `hyperprotect.intercept.block_place` | BlockPlaceInterceptor | `block_place` (18) |
-| `hyperprotect.intercept.hammer` | HammerInterceptor | `hammer` (19) |
-| `hyperprotect.intercept.use` | UseInterceptor | `use` (20) |
-| `hyperprotect.intercept.seat` | SeatInterceptor | `seat` (21) |
 | `hyperprotect.intercept.respawn` | RespawnInterceptor | `respawn` (22) |
+
+#### SimpleBlockInteractionGate (consolidated — 20 interaction types)
+
+All set by `SimpleBlockInteractionGate` which intercepts `SimpleBlockInteraction.interactWithBlock()`:
+
+| Property | Intercepted Class | Hook Slot |
+|----------|-------------------|-----------|
+| `hyperprotect.intercept.use_block` | UseBlockInteraction | `use` (20) |
+| `hyperprotect.intercept.break_block_interaction` | BreakBlockInteraction | `block_break` (0) |
+| `hyperprotect.intercept.change_block` | ChangeBlockInteraction | `block_place` (18) |
+| `hyperprotect.intercept.use` | ChangeStateInteraction | `use` (20) |
+| `hyperprotect.intercept.hammer` | CycleBlockGroupInteraction | `hammer` (19) |
+| `hyperprotect.intercept.crop_harvest` | HarvestCropInteraction | `use` (20) |
+| `hyperprotect.intercept.farming_stage` | ChangeFarmingStageInteraction | `use` (20) |
+| `hyperprotect.intercept.fertilize` | FertilizeSoilInteraction | `use` (20) |
+| `hyperprotect.intercept.watering_can` | UseWateringCanInteraction | `use` (20) |
+| `hyperprotect.intercept.capture_crate` | UseCaptureCrateInteraction | `use` (20) |
+| `hyperprotect.intercept.coop` | UseCoopInteraction | `use` (20) |
+| `hyperprotect.intercept.teleporter` | TeleporterInteraction | `teleporter` (9) |
+| `hyperprotect.intercept.portal_entry` | EnterPortalInteraction | `portal` (10) |
+| `hyperprotect.intercept.portal_return` | ReturnPortalInteraction | `portal` (10) |
+| `hyperprotect.intercept.instance_config` | TeleportConfigInstanceInteraction | `portal` (10) |
+| `hyperprotect.intercept.seat` | SeatingInteraction | `seat` (21) |
+| `hyperprotect.intercept.minecart_spawn` | SpawnMinecartInteraction | `block_place` (18) |
+| `hyperprotect.intercept.container_open` | OpenContainerInteraction | `container_open` (17) |
+| `hyperprotect.intercept.processing_bench` | OpenProcessingBenchInteraction | `container_open` (17) |
+| `hyperprotect.intercept.bench_page` | OpenBenchPageInteraction | `container_open` (17) |
+
+#### SimpleInstantInteractionGate (consolidated — 4 interaction types)
+
+All set by `SimpleInstantInteractionGate` which intercepts `SimpleInstantInteraction.interact()`:
+
+| Property | Intercepted Class | Hook Slot |
+|----------|-------------------|-----------|
+| `hyperprotect.intercept.instance_teleport` | TeleportInstanceInteraction | `portal` (10) |
+| `hyperprotect.intercept.instance_exit` | ExitInstanceInteraction | `portal` (10) |
+| `hyperprotect.intercept.hub_portal` | HubPortalInteraction | `portal` (10) |
+| `hyperprotect.intercept.item_pickup_manual` | ManualItemPickupInteraction | `item_pickup` (4) |
 
 ## Usage
 
@@ -51,7 +91,24 @@ if ("true".equals(System.getProperty("hyperprotect.bridge.active"))) {
 if ("true".equals(System.getProperty("hyperprotect.intercept.block_break"))) {
     bridge.set(0, new MyBlockBreakHook());
 }
+
+// Check operating mode
+String mode = System.getProperty("hyperprotect.mode"); // "standalone" or "compatible"
 ```
+
+## OrbisGuard Compatibility Mode
+
+When OrbisGuard-Mixins is detected in `earlyplugins/`, `HyperProtectConfigPlugin` disables 17 conflicting HP mixins, keeping only 5 unique mixin classes active:
+
+| Active Mixin | Coverage |
+|-------------|----------|
+| `SimpleBlockInteractionGate` | use, hammer, seat, container_open, teleporter, portal (block), farming |
+| `SimpleInstantInteractionGate` | portal (instant), hub, instance teleport/exit, manual item pickup |
+| `BlockPlaceInterceptor` | block_place |
+| `EntityDamageInterceptor` | entity_damage |
+| `RespawnInterceptor` | respawn |
+
+In compatible mode, only the properties from these 5 classes are pre-declared.
 
 ## Spawn Startup Behavior
 

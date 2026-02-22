@@ -105,9 +105,19 @@ Intercepts block state changes — any block with toggleable or interactive stat
 | `evaluateUse` | `int evaluateUse(UUID playerUuid, String worldName, int x, int y, int z)` | verdict int |
 | `fetchUseDenyReason` | `String fetchUseDenyReason(UUID playerUuid, String worldName, int x, int y, int z)` | deny message or null |
 
-**Intercepted actions:** Block state changes via `ChangeStateInteraction.interactWithBlock()`. Covers any block that has toggleable state. Position is the target block.
+**Intercepted actions** (via `SimpleBlockInteractionGate`):
+- `UseBlockInteraction` — General block use interactions
+- `ChangeStateInteraction` — Toggleable block state changes
+- `HarvestCropInteraction` — Crop harvesting
+- `ChangeFarmingStageInteraction` — Farming stage changes
+- `FertilizeSoilInteraction` — Soil fertilization
+- `UseWateringCanInteraction` — Watering can use
+- `UseCaptureCrateInteraction` — Capture crate use
+- `UseCoopInteraction` — Animal coop use
 
-**Use cases:** Prevent outsiders from interacting with blocks in claimed territory. Protect interactive blocks with toggleable state.
+Position is the target block.
+
+**Use cases:** Prevent outsiders from interacting with blocks in claimed territory. Protect farming operations and interactive blocks.
 
 ---
 
@@ -261,7 +271,7 @@ Controls all portal and instance interactions.
 | `evaluateGateway` | `int evaluateGateway(UUID playerUuid, String worldName, int x, int y, int z)` | verdict int |
 | `fetchGatewayDenyReason` | `String fetchGatewayDenyReason(UUID playerUuid, String worldName, int x, int y, int z)` | deny message or null |
 
-**Intercepted in 6 locations:**
+**Intercepted across 6 interaction types** (via `SimpleBlockInteractionGate` and `SimpleInstantInteractionGate`):
 - `EnterPortalInteraction` — Portal entry (position = portal block)
 - `ReturnPortalInteraction` — Portal return/exit (position = portal block)
 - `TeleportConfigInstanceInteraction` — Configured instance teleport (position = block)
@@ -312,9 +322,14 @@ Controls storage container opening.
 | `evaluateContainerOpen` | `int evaluateContainerOpen(UUID playerUuid, String worldName, int x, int y, int z)` | verdict int |
 | `fetchContainerOpenDenyReason` | `String fetchContainerOpenDenyReason(UUID playerUuid, String worldName, int x, int y, int z)` | deny message or null |
 
-**Intercepted actions:** Container block interaction via `OpenContainerInteraction.interactWithBlock()`. Position is the container block location.
+**Intercepted actions** (via `SimpleBlockInteractionGate`):
+- `OpenContainerInteraction` — Storage container opening
+- `OpenProcessingBenchInteraction` — Processing bench opening
+- `OpenBenchPageInteraction` — Bench page opening
 
-**Note:** This is separate from `container_access` (slot 7) which controls crafting at workbenches. This hook controls opening storage containers.
+Position is the container/bench block location.
+
+**Note:** This is separate from `container_access` (slot 7) which controls crafting at workbenches. This hook controls opening storage containers and crafting bench interfaces.
 
 ---
 

@@ -134,7 +134,7 @@ All hooks return `int` verdicts (except `respawn` which returns `double[]` coord
 | Slot | Name | Description |
 |------|------|-------------|
 | 9 | `teleporter` | Teleporter block use |
-| 10 | `portal` | All portal and instance interactions (6 interceptors) |
+| 10 | `portal` | All portal and instance interactions (6 interaction types) |
 | 21 | `seat` | Block seating (chairs, benches) |
 
 ### Commands & Logging (2 hooks)

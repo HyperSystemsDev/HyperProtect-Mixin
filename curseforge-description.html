@@ -6,7 +6,7 @@
 <h2><span style="color: #f0b232;">Why HyperProtect-Mixin?</span></h2>
 <ul>
     <li><strong><span style="color: #f0b232;">20 Protection Hooks</span></strong> - Comprehensive coverage across building, combat, items, entities, containers, transport, commands, and logging</li>
-    <li><strong><span style="color: #f0b232;">31 Mixin Interceptors</span></strong> - Multiple injection points per hook for thorough event capture (e.g., 4 spawn interceptors, 6 portal interceptors)</li>
+    <li><strong><span style="color: #f0b232;">22 Mixin Interceptors</span></strong> - Multiple injection points per hook for thorough event capture, with consolidated interaction gates covering 24 interaction types</li>
     <li><strong><span style="color: #f0b232;">Lock-Free Bridge</span></strong> - <code>AtomicReferenceArray</code> with zero-contention reads &mdash; no ConcurrentHashMap overhead</li>
     <li><strong><span style="color: #f0b232;">Fail-Open Safety</span></strong> - Errors, missing hooks, or negative verdicts always allow actions &mdash; never locks players out</li>
     <li><strong><span style="color: #f0b232;">Zero Configuration</span></strong> - Auto-initializes on server startup. No config files needed.</li>
@@ -26,7 +26,7 @@
     <tbody>
     <tr>
         <td><strong>Hook Count</strong></td>
-        <td><span style="color: #98c379;">20 hooks (31 interceptors)</span></td>
+        <td><span style="color: #98c379;">20 hooks (22 interceptors)</span></td>
         <td>11 hooks</td>
     </tr>
     <tr>
@@ -59,6 +59,11 @@
         <td><span style="color: #98c379;">Configurable startup blocking</span></td>
         <td>None</td>
     </tr>
+    <tr>
+        <td><strong>OG Coexistence</strong></td>
+        <td><span style="color: #98c379;">Auto-detects OG, disables conflicting mixins</span></td>
+        <td>No awareness of other mixin mods</td>
+    </tr>
     </tbody>
 </table>
 <p>&nbsp;</p>
@@ -73,7 +78,7 @@
     <li><strong><span style="color: #61afef;">builder_tools</span></strong> (slot 3) &mdash; Builder tool paste operations</li>
     <li><strong><span style="color: #61afef;">block_place</span></strong> (slot 18) &mdash; Block placement</li>
     <li><strong><span style="color: #61afef;">hammer</span></strong> (slot 19) &mdash; Hammer block cycling (variant rotation)</li>
-    <li><strong><span style="color: #61afef;">use</span></strong> (slot 20) &mdash; Block state changes (doors, buttons, levers, campfires, lanterns)</li>
+    <li><strong><span style="color: #61afef;">use</span></strong> (slot 20) &mdash; Block state changes and interactions (farming, state toggles, general use)</li>
 </ul>
 
 <h3><span style="color: #c678dd;">Items (3 hooks)</span></h3>
@@ -86,7 +91,7 @@
 <h3><span style="color: #56b6c2;">Containers (2 hooks)</span></h3>
 <ul>
     <li><strong><span style="color: #61afef;">container_access</span></strong> (slot 7) &mdash; Crafting/workbench access</li>
-    <li><strong><span style="color: #61afef;">container_open</span></strong> (slot 17) &mdash; Storage container (chest/barrel) opening</li>
+    <li><strong><span style="color: #61afef;">container_open</span></strong> (slot 17) &mdash; Storage container opening</li>
 </ul>
 
 <h3><span style="color: #e06c75;">Combat (1 hook)</span></h3>
@@ -103,7 +108,7 @@
 <h3><span style="color: #e5c07b;">Transport (3 hooks)</span></h3>
 <ul>
     <li><strong><span style="color: #61afef;">teleporter</span></strong> (slot 9) &mdash; Teleporter block use</li>
-    <li><strong><span style="color: #61afef;">portal</span></strong> (slot 10) &mdash; All portal and instance interactions (6 interceptors)</li>
+    <li><strong><span style="color: #61afef;">portal</span></strong> (slot 10) &mdash; All portal and instance interactions (6 interaction types)</li>
     <li><strong><span style="color: #61afef;">seat</span></strong> (slot 21) &mdash; Block seating (chairs, benches)</li>
 </ul>
 

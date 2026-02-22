@@ -90,7 +90,7 @@ Deny messages returned from `fetch*DenyReason()` support `&`-code formatting:
 
 | Code | Effect |
 |------|--------|
-| `&0`-`&9`, `&a`-`&f` | Minecraft color codes |
+| `&0`-`&9`, `&a`-`&f` | Standard color codes |
 | `&#RRGGBB` | Hex color (e.g., `&#FF5555`) |
 | `&#RGB` | Short hex (e.g., `&#F55`) |
 | `&red`, `&blue`, etc. | Named colors |

@@ -6,7 +6,7 @@ This guide covers migrating your mod from OrbisGuard-Mixins to HyperProtect-Mixi
 
 | Aspect | OrbisGuard-Mixins | HyperProtect-Mixin |
 |--------|-------------------|-------------------|
-| Registry type | `ConcurrentHashMap<String, Object>` | `AtomicReferenceArray<Object>(16)` |
+| Registry type | `ConcurrentHashMap<String, Object>` | `AtomicReferenceArray<Object>(24)` |
 | Registry key | `orbisguard.hook.registry` | `hyperprotect.bridge` |
 | Hook addressing | String keys | Integer slot indices |
 | Return type | `String` (null=allow, non-null=deny) or `boolean` | `int` verdict (0=allow, 1=deny+message, 2=silent deny, 3=mod handles) |
@@ -37,7 +37,7 @@ This guide covers migrating your mod from OrbisGuard-Mixins to HyperProtect-Mixi
 | *(new)* | 16 (`entity_damage`) | `evaluateEntityDamage(UUID,UUID,String,int,int,int)→int` |
 | *(new)* | 17 (`container_open`) | `evaluateContainerOpen(UUID,String,int,int,int)→int` |
 | *(new)* | 18 (`block_place`) | `evaluateBlockPlace(UUID,String,int,int,int)→int` |
-| `orbisguard.use.hook` | — | *(removed — use slot 0, 7, 17, or 18)* |
+| `orbisguard.use.hook` | 20 (`use`) | `evaluateUse(UUID,String,int,int,int)->int` |
 
 ## Registry Migration
 
