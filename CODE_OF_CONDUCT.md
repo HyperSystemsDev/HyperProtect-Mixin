@@ -40,7 +40,7 @@ Examples of unacceptable behavior include:
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-https://discord.gg/SNPjyfkYPc.
+https://discord.com/invite/aZaa5vcFYh.
 All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution

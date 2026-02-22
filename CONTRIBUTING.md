@@ -161,4 +161,4 @@ refactor: extract common interceptor pattern to base utility
 
 - **Bugs**: Use the [Bug Report](https://github.com/HyperSystemsDev/HyperProtect-Mixin/issues/new?template=BUG_REPORT.yml) template
 - **Feature Requests**: Use the [Feature Request](https://github.com/HyperSystemsDev/HyperProtect-Mixin/issues/new?template=FEATURE_REQUEST.yml) template
-- **Questions**: Join the [HyperSystems Discord](https://discord.gg/SNPjyfkYPc)
+- **Questions**: Join the [HyperSystems Discord](https://discord.com/invite/aZaa5vcFYh)
