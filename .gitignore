@@ -26,7 +26,7 @@ desktop.ini
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 
-# Dependencies (local JARs)
+# Dependencies (local dev only — CI resolves from Maven/CurseMaven)
 libs/
 
 # Logs

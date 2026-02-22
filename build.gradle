@@ -31,14 +31,15 @@ java {
 repositories {
     mavenCentral()
     maven { url = "https://maven.hytale.com/${hytaleChannel}" }
+    maven { url = "https://cursemaven.com" }
 }
 
 dependencies {
     // Hytale Server API (resolved from maven.hytale.com)
     compileOnly "com.hypixel.hytale:Server:${hytaleServerVersion}"
 
-    // Hyxin mixin framework (local — not published to Maven)
-    compileOnly fileTree('libs') { include '*.jar' }
+    // Hyxin mixin framework (MIT licensed, resolved from CurseMaven)
+    compileOnly "curse.maven:hyxin-1405491:7399430"
 
     // Annotations
     compileOnly 'org.jetbrains:annotations:24.1.0'
