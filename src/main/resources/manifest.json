@@ -1,7 +1,7 @@
 {
   "Group": "com.hyperprotect",
   "Name": "HyperProtect-Mixin",
-  "Version": "1.0.0",
+  "Version": "${version}",
   "Description": "Generic server protection hooks via Hyxin mixins — any mod can register hook handlers",
   "Authors": [{"Name": "HyperSystems"}],
   "ServerVersion": "*",

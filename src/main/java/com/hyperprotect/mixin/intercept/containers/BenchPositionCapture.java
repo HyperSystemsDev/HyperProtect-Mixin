@@ -20,7 +20,7 @@ public class BenchPositionCapture {
 
     /** ThreadLocal bench coordinates for use by CraftingGateInterceptor. */
     @Unique
-    static final ThreadLocal<int[]> benchCoords = new ThreadLocal<>();
+    private static final ThreadLocal<int[]> benchCoords = new ThreadLocal<>();
 
     static {
         System.setProperty("hyperprotect.intercept.workbench_context", "true");

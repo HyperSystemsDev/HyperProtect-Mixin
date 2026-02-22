@@ -1,8 +1,5 @@
 package com.hyperprotect.mixin.intercept.combat;
 
-import com.hyperprotect.mixin.bridge.FaultReporter;
-import com.hyperprotect.mixin.bridge.HookSlot;
-import com.hyperprotect.mixin.bridge.ProtectionBridge;
 import com.hypixel.hytale.component.CommandBuffer;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.math.vector.Vector3d;
@@ -20,13 +17,15 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 import javax.annotation.Nonnull;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Intercepts player-initiated entity damage in DamageEntityInteraction.tick0().
@@ -44,13 +43,13 @@ import java.util.UUID;
  * Fail-open on error.
  */
 @Mixin(DamageEntityInteraction.class)
-public class EntityDamageInterceptor {
+public abstract class EntityDamageInterceptor {
 
     @Unique
-    private static final FaultReporter FAULTS = new FaultReporter("EntityDamageInterceptor");
+    private static final AtomicLong faultCount = new AtomicLong();
 
     @Unique
-    private static volatile HookSlot cachedSlot;
+    private static volatile Object[] hookCache;
 
     @Unique
     private static final MethodType EVALUATE_TYPE = MethodType.methodType(
@@ -65,67 +64,109 @@ public class EntityDamageInterceptor {
     }
 
     @Unique
-    private static Message formatReason(String reason) {
-        if (reason == null || reason.isEmpty()) return null;
-        Object handle = ProtectionBridge.get(ProtectionBridge.format_handle);
-        if (handle instanceof MethodHandle mh) {
-            try { return (Message) mh.invoke(reason); } catch (Throwable ignored) {}
+    @SuppressWarnings("unchecked")
+    private static Object getBridge(int slot) {
+        try {
+            Object bridge = System.getProperties().get("hyperprotect.bridge");
+            if (bridge == null) return null;
+            return ((AtomicReferenceArray<Object>) bridge).get(slot);
+        } catch (Exception e) {
+            return null;
         }
-        return Message.raw(reason);
     }
 
     @Unique
-    private static HookSlot resolveSlot() {
-        HookSlot cached = cachedSlot;
-        Object current = ProtectionBridge.get(ProtectionBridge.entity_damage);
-        if (current == null) {
-            cachedSlot = null;
+    private static void reportFault(Throwable t) {
+        long count = faultCount.incrementAndGet();
+        if (count == 1 || count % 100 == 0) {
+            System.err.println("[HyperProtect] EntityDamageInterceptor error #" + count + ": " + t);
+        }
+    }
+
+    @Unique
+    private static Object[] resolveHook() {
+        Object[] cached = hookCache;
+        Object impl = getBridge(16);
+        if (impl == null) {
+            hookCache = null;
             return null;
         }
-        if (cached != null && cached.impl() == current) {
+        if (cached != null && cached[0] == impl) {
             return cached;
         }
         try {
-            cached = ProtectionBridge.resolve(
-                    ProtectionBridge.entity_damage,
-                    "evaluateEntityDamage", EVALUATE_TYPE,
-                    "fetchEntityDamageDenyReason", FETCH_REASON_TYPE);
-            cachedSlot = cached;
+            MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                impl.getClass(), "evaluateEntityDamage", EVALUATE_TYPE);
+            MethodHandle secondary = null;
+            try {
+                secondary = MethodHandles.publicLookup().findVirtual(
+                    impl.getClass(), "fetchEntityDamageDenyReason", FETCH_REASON_TYPE);
+            } catch (NoSuchMethodException ignored) {}
+            cached = new Object[] { impl, primary, secondary };
+            hookCache = cached;
             return cached;
         } catch (Exception e) {
-            FAULTS.report("Failed to resolve entity_damage hook", e);
+            reportFault(e);
             return null;
         }
     }
 
-    @Inject(
-        method = "tick0",
-        at = @At("HEAD"),
-        cancellable = true
-    )
-    private void gateEntityDamage(boolean firstRun, float time,
-                                  @Nonnull InteractionType type,
-                                  @Nonnull InteractionContext context,
-                                  @Nonnull CooldownHandler cooldownHandler,
-                                  CallbackInfo ci) {
+    @Unique
+    private static void formatReason(Object[] hook, Player player,
+                                     UUID attackerUuid, UUID targetUuid, String worldName,
+                                     int x, int y, int z) {
         try {
-            HookSlot slot = resolveSlot();
-            if (slot == null) return;
+            if (hook.length < 3 || hook[2] == null) return;
+            String raw = (String) ((MethodHandle) hook[2]).invoke(hook[0],
+                    attackerUuid, targetUuid, worldName, x, y, z);
+            if (raw == null || raw.isEmpty()) return;
+            Object fmtHandle = getBridge(15);
+            if (fmtHandle instanceof MethodHandle mh) {
+                Message msg = (Message) mh.invoke(raw);
+                player.sendMessage(msg);
+            }
+        } catch (Throwable t) {
+            reportFault(t);
+        }
+    }
 
-            Ref<EntityStore> targetRef = context.getTargetEntity();
-            if (targetRef == null || !targetRef.isValid()) return;
+    /**
+     * Redirect the context.getTargetEntity() call at the start of tick0.
+     * If the hook denies, we set InteractionState.Failed and return null, causing the
+     * original code to detect null targetRef and exit via the existing null check.
+     * If allowed, we return the original result.
+     */
+    @Redirect(
+        method = "tick0",
+        at = @At(value = "INVOKE",
+            target = "Lcom/hypixel/hytale/server/core/entity/InteractionContext;getTargetEntity()Lcom/hypixel/hytale/component/Ref;",
+            ordinal = 0)
+    )
+    private Ref<EntityStore> gateEntityDamage(InteractionContext context,
+                                               boolean firstRun, float time,
+                                               @Nonnull InteractionType type,
+                                               @Nonnull InteractionContext contextParam,
+                                               @Nonnull CooldownHandler cooldownHandler) {
+        // Call the original method first to get the real target ref
+        Ref<EntityStore> targetRef = context.getTargetEntity();
+
+        try {
+            Object[] hook = resolveHook();
+            if (hook == null) return targetRef; // No hook = allow
+
+            if (targetRef == null || !targetRef.isValid()) return targetRef; // Let original handle it
 
             CommandBuffer<EntityStore> commandBuffer = context.getCommandBuffer();
-            if (commandBuffer == null) return;
+            if (commandBuffer == null) return targetRef;
 
             Ref<EntityStore> attackerRef = context.getEntity();
-            if (attackerRef == null || !attackerRef.isValid()) return;
+            if (attackerRef == null || !attackerRef.isValid()) return targetRef;
 
             PlayerRef attackerPlayerRef = commandBuffer.getComponent(attackerRef, PlayerRef.getComponentType());
-            if (attackerPlayerRef == null) return; // Not a player attacker — skip
+            if (attackerPlayerRef == null) return targetRef; // Not a player attacker — skip
 
             World world = commandBuffer.getExternalData().getWorld();
-            if (world == null) return;
+            if (world == null) return targetRef;
 
             UUID attackerUuid = attackerPlayerRef.getUuid();
             String worldName = world.getName();
@@ -148,27 +189,25 @@ public class EntityDamageInterceptor {
                 // Position unavailable — pass (0,0,0), consumer should handle gracefully
             }
 
-            int verdict = (int) slot.primary().invoke(
-                    slot.impl(), attackerUuid, targetUuid, worldName, x, y, z);
+            int verdict = (int) ((MethodHandle) hook[1]).invoke(
+                    hook[0], attackerUuid, targetUuid, worldName, x, y, z);
 
-            if (verdict < 0) return; // Fail-open for negative/unknown values
+            if (verdict < 0) return targetRef; // Fail-open for negative/unknown values
 
             if (verdict == 1 || verdict == 2 || verdict == 3) {
-                if (verdict == 1 && slot.hasSecondary()) {
-                    String reason = (String) slot.secondary().invoke(
-                            slot.impl(), attackerUuid, targetUuid, worldName, x, y, z);
+                if (verdict == 1) {
                     Player player = commandBuffer.getComponent(attackerRef, Player.getComponentType());
                     if (player != null) {
-                        Message msg = formatReason(reason);
-                        if (msg != null) player.sendMessage(msg);
+                        formatReason(hook, player, attackerUuid, targetUuid, worldName, x, y, z);
                     }
                 }
                 context.getState().state = InteractionState.Failed;
-                ci.cancel();
+                return null; // Return null to trigger the existing null-check early exit in tick0
             }
         } catch (Throwable t) {
-            FAULTS.report(t);
+            reportFault(t);
             // Fail-open: allow damage
         }
+        return targetRef;
     }
 }

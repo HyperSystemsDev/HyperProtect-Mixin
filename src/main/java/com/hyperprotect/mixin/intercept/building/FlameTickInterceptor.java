@@ -1,8 +1,5 @@
 package com.hyperprotect.mixin.intercept.building;
 
-import com.hyperprotect.mixin.bridge.FaultReporter;
-import com.hyperprotect.mixin.bridge.HookSlot;
-import com.hyperprotect.mixin.bridge.ProtectionBridge;
 import com.hypixel.hytale.server.core.asset.type.blocktick.BlockTickStrategy;
 import com.hypixel.hytale.server.core.asset.type.fluid.Fluid;
 import com.hypixel.hytale.server.core.asset.type.fluid.FluidTicker;
@@ -15,7 +12,11 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Intercepts fire fluid spreading in {@code FluidTicker.process()}.
@@ -38,15 +39,15 @@ public abstract class FlameTickInterceptor {
 
     @Unique private static final int ALLOW = 0;
 
-    // --- FaultReporter ---
+    // --- Fault tracking ---
 
     @Unique
-    private static final FaultReporter FAULTS = new FaultReporter("FlameTickInterceptor");
+    private static final AtomicLong faultCount = new AtomicLong();
 
-    // --- Cached HookSlot (volatile for cross-thread visibility) ---
+    // --- Cached hook (volatile for cross-thread visibility) ---
 
     @Unique
-    private static volatile HookSlot cachedSlot;
+    private static volatile Object[] hookCache;
 
     // --- MethodType for hook resolution ---
 
@@ -64,27 +65,49 @@ public abstract class FlameTickInterceptor {
                                                 Fluid fluid, int fluidId, byte fluidLevel,
                                                 int worldX, int worldY, int worldZ);
 
+    // --- Helper methods ---
+
+    @Unique
+    @SuppressWarnings("unchecked")
+    private static Object getBridge(int slot) {
+        try {
+            Object bridge = System.getProperties().get("hyperprotect.bridge");
+            if (bridge == null) return null;
+            return ((AtomicReferenceArray<Object>) bridge).get(slot);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Unique
+    private static void reportFault(Throwable t) {
+        long count = faultCount.incrementAndGet();
+        if (count == 1 || count % 100 == 0) {
+            System.err.println("[HyperProtect] FlameTickInterceptor error #" + count + ": " + t);
+        }
+    }
+
     // --- Hook resolution ---
 
     @Unique
-    private static HookSlot resolveSlot() {
-        HookSlot cached = cachedSlot;
-        Object current = ProtectionBridge.get(ProtectionBridge.fire_spread);
-        if (current == null) {
-            cachedSlot = null;
+    private static Object[] resolveHook() {
+        Object[] cached = hookCache;
+        Object impl = getBridge(2); // fire_spread = 2
+        if (impl == null) {
+            hookCache = null;
             return null;
         }
-        if (cached != null && cached.impl() == current) {
+        if (cached != null && cached[0] == impl) {
             return cached;
         }
         try {
-            cached = ProtectionBridge.resolve(
-                    ProtectionBridge.fire_spread,
-                    "evaluateFlame", EVALUATE_TYPE);
-            cachedSlot = cached;
+            MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                impl.getClass(), "evaluateFlame", EVALUATE_TYPE);
+            cached = new Object[] { impl, primary };
+            hookCache = cached;
             return cached;
         } catch (Exception e) {
-            FAULTS.report("Failed to resolve fire_spread hook", e);
+            reportFault(e);
             return null;
         }
     }
@@ -130,16 +153,16 @@ public abstract class FlameTickInterceptor {
     @Unique
     private static boolean queryFlameVerdict(World world, int x, int y, int z) {
         try {
-            HookSlot slot = resolveSlot();
-            if (slot == null) return false; // No hook = allow (fail-open)
+            Object[] hook = resolveHook();
+            if (hook == null) return false; // No hook = allow (fail-open)
 
             String worldName = world.getName();
-            int verdict = (int) slot.primary().invoke(slot.impl(), worldName, x, y, z);
+            int verdict = (int) ((MethodHandle) hook[1]).invoke(hook[0], worldName, x, y, z);
 
             // Any positive verdict = block fire spread
             return verdict > ALLOW;
         } catch (Throwable e) {
-            FAULTS.report(e);
+            reportFault(e);
             return false; // Fail-open
         }
     }

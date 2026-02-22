@@ -52,10 +52,10 @@ The bridge array uses fixed integer indices for each hook:
 | 14 | `spawn_allow_startup` | Boolean flag: allow spawns during startup |
 | 15 | `format_handle` | Reserved: cached ChatFormatter MethodHandle |
 | 16 | `entity_damage` | Player-initiated entity damage (PvP) |
-| 17 | `container_open` | Container (chest) opening |
+| 17 | `container_open` | Storage container opening |
 | 18 | `block_place` | Block placement |
 | 19 | `hammer` | Hammer block cycling (variant rotation) |
-| 20 | `use` | Block state changes (doors, buttons, levers, etc.) |
+| 20 | `use` | Block state changes and interactions |
 | 21 | `seat` | Block seating (chairs, benches) |
 | 22 | `respawn` | Player respawn location override (value hook) |
 

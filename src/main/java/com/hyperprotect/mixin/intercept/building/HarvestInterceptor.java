@@ -1,8 +1,5 @@
 package com.hyperprotect.mixin.intercept.building;
 
-import com.hyperprotect.mixin.bridge.FaultReporter;
-import com.hyperprotect.mixin.bridge.HookSlot;
-import com.hyperprotect.mixin.bridge.ProtectionBridge;
 import com.hypixel.hytale.component.ComponentAccessor;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.math.vector.Vector3d;
@@ -27,8 +24,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Intercepts block harvesting (break + interactive pickup) in BlockHarvestUtils.
@@ -84,15 +84,15 @@ public abstract class HarvestInterceptor {
     @Unique
     private static final ThreadLocal<HarvestContext> context = new ThreadLocal<>();
 
-    // --- FaultReporter ---
+    // --- Fault tracking ---
 
     @Unique
-    private static final FaultReporter FAULTS = new FaultReporter("HarvestInterceptor");
+    private static final AtomicLong faultCount = new AtomicLong();
 
-    // --- Cached HookSlots (volatile for cross-thread visibility) ---
+    // --- Cached hooks (volatile for cross-thread visibility) ---
 
-    @Unique private static volatile HookSlot breakSlot;
-    @Unique private static volatile HookSlot pickupSlot;
+    @Unique private static volatile Object[] breakHookCache;
+    @Unique private static volatile Object[] pickupHookCache;
 
     // --- MethodType constants for hook resolution ---
 
@@ -115,52 +115,82 @@ public abstract class HarvestInterceptor {
         throw new UnsupportedOperationException("Shadow stub");
     }
 
-    // --- Hook resolution helpers ---
+    // --- Helper methods ---
 
     @Unique
-    private static HookSlot resolveBreakSlot() {
-        HookSlot cached = breakSlot;
-        Object current = ProtectionBridge.get(ProtectionBridge.block_break);
-        if (current == null) {
-            breakSlot = null;
-            return null;
-        }
-        if (cached != null && cached.impl() == current) {
-            return cached;
-        }
+    @SuppressWarnings("unchecked")
+    private static Object getBridge(int slot) {
         try {
-            cached = ProtectionBridge.resolve(
-                    ProtectionBridge.block_break,
-                    "evaluate", EVALUATE_TYPE,
-                    "fetchDenyReason", FETCH_REASON_TYPE);
-            breakSlot = cached;
-            return cached;
+            Object bridge = System.getProperties().get("hyperprotect.bridge");
+            if (bridge == null) return null;
+            return ((AtomicReferenceArray<Object>) bridge).get(slot);
         } catch (Exception e) {
-            FAULTS.report("Failed to resolve block_break hook", e);
             return null;
         }
     }
 
     @Unique
-    private static HookSlot resolvePickupSlot() {
-        HookSlot cached = pickupSlot;
-        Object current = ProtectionBridge.get(ProtectionBridge.item_pickup);
-        if (current == null) {
-            pickupSlot = null;
+    private static void reportFault(Throwable t) {
+        long count = faultCount.incrementAndGet();
+        if (count == 1 || count % 100 == 0) {
+            System.err.println("[HyperProtect] HarvestInterceptor error #" + count + ": " + t);
+        }
+    }
+
+    // --- Hook resolution helpers ---
+
+    @Unique
+    private static Object[] resolveBreakHook() {
+        Object[] cached = breakHookCache;
+        Object impl = getBridge(0); // block_break = 0
+        if (impl == null) {
+            breakHookCache = null;
             return null;
         }
-        if (cached != null && cached.impl() == current) {
+        if (cached != null && cached[0] == impl) {
             return cached;
         }
         try {
-            cached = ProtectionBridge.resolve(
-                    ProtectionBridge.item_pickup,
-                    "evaluatePickup", EVALUATE_TYPE,
-                    "fetchPickupDenyReason", FETCH_REASON_TYPE);
-            pickupSlot = cached;
+            MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                impl.getClass(), "evaluate", EVALUATE_TYPE);
+            MethodHandle secondary = null;
+            try {
+                secondary = MethodHandles.publicLookup().findVirtual(
+                    impl.getClass(), "fetchDenyReason", FETCH_REASON_TYPE);
+            } catch (NoSuchMethodException ignored) {}
+            cached = new Object[] { impl, primary, secondary };
+            breakHookCache = cached;
             return cached;
         } catch (Exception e) {
-            FAULTS.report("Failed to resolve item_pickup hook for interactive pickup", e);
+            reportFault(e);
+            return null;
+        }
+    }
+
+    @Unique
+    private static Object[] resolvePickupHook() {
+        Object[] cached = pickupHookCache;
+        Object impl = getBridge(4); // item_pickup = 4
+        if (impl == null) {
+            pickupHookCache = null;
+            return null;
+        }
+        if (cached != null && cached[0] == impl) {
+            return cached;
+        }
+        try {
+            MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                impl.getClass(), "evaluatePickup", EVALUATE_TYPE);
+            MethodHandle secondary = null;
+            try {
+                secondary = MethodHandles.publicLookup().findVirtual(
+                    impl.getClass(), "fetchPickupDenyReason", FETCH_REASON_TYPE);
+            } catch (NoSuchMethodException ignored) {}
+            cached = new Object[] { impl, primary, secondary };
+            pickupHookCache = cached;
+            return cached;
+        } catch (Exception e) {
+            reportFault(e);
             return null;
         }
     }
@@ -170,7 +200,7 @@ public abstract class HarvestInterceptor {
     @Unique
     private static Message formatReason(String reason) {
         if (reason == null || reason.isEmpty()) return null;
-        Object handle = ProtectionBridge.get(ProtectionBridge.format_handle);
+        Object handle = getBridge(15); // format_handle = 15
         if (handle instanceof MethodHandle mh) {
             try { return (Message) mh.invoke(reason); } catch (Throwable ignored) {}
         }
@@ -229,17 +259,17 @@ public abstract class HarvestInterceptor {
             Vector3i targetBlock = ctx != null ? ctx.target() : null;
 
             if (targetBlock != null) {
-                HookSlot slot = resolveBreakSlot();
-                if (slot != null) {
-                    int verdict = (int) slot.primary().invoke(
-                            slot.impl(), playerUuid, worldName,
+                Object[] hook = resolveBreakHook();
+                if (hook != null) {
+                    int verdict = (int) ((MethodHandle) hook[1]).invoke(
+                            hook[0], playerUuid, worldName,
                             targetBlock.getX(), targetBlock.getY(), targetBlock.getZ());
 
                     if (verdict == DENY_WITH_MESSAGE || verdict == DENY_SILENT || verdict == DENY_MOD_HANDLES) {
                         String reason = null;
-                        if (verdict == DENY_WITH_MESSAGE && slot.hasSecondary()) {
-                            reason = (String) slot.secondary().invoke(
-                                    slot.impl(), playerUuid, worldName,
+                        if (verdict == DENY_WITH_MESSAGE && hook.length >= 3 && hook[2] != null) {
+                            reason = (String) ((MethodHandle) hook[2]).invoke(
+                                    hook[0], playerUuid, worldName,
                                     targetBlock.getX(), targetBlock.getY(), targetBlock.getZ());
                         }
                         ctx = context.get();
@@ -250,7 +280,7 @@ public abstract class HarvestInterceptor {
                 }
             }
         } catch (Throwable e) {
-            FAULTS.report(e);
+            reportFault(e);
         }
         return BlockInteractionUtils.isNaturalAction(ref, entityStore);
     }
@@ -323,17 +353,17 @@ public abstract class HarvestInterceptor {
             String worldName = world != null ? world.getName() : null;
 
             if (worldName != null && origin != null) {
-                HookSlot slot = resolvePickupSlot();
-                if (slot != null) {
-                    int pickupVerdict = (int) slot.primary().invoke(
-                            slot.impl(), playerUuid, worldName,
+                Object[] hook = resolvePickupHook();
+                if (hook != null) {
+                    int pickupVerdict = (int) ((MethodHandle) hook[1]).invoke(
+                            hook[0], playerUuid, worldName,
                             (int) origin.getX(), (int) origin.getY(), (int) origin.getZ());
 
                     if (pickupVerdict == DENY_WITH_MESSAGE || pickupVerdict == DENY_SILENT || pickupVerdict == DENY_MOD_HANDLES) {
                         // Send message for DENY_WITH_MESSAGE
-                        if (pickupVerdict == DENY_WITH_MESSAGE && slot.hasSecondary()) {
-                            String reason = (String) slot.secondary().invoke(
-                                    slot.impl(), playerUuid, worldName,
+                        if (pickupVerdict == DENY_WITH_MESSAGE && hook.length >= 3 && hook[2] != null) {
+                            String reason = (String) ((MethodHandle) hook[2]).invoke(
+                                    hook[0], playerUuid, worldName,
                                     (int) origin.getX(), (int) origin.getY(), (int) origin.getZ());
                             Player player = (Player) componentAccessor.getComponent(ref, Player.getComponentType());
                             Message msg = formatReason(reason);
@@ -346,7 +376,7 @@ public abstract class HarvestInterceptor {
                 }
             }
         } catch (Throwable e) {
-            FAULTS.report(e);
+            reportFault(e);
         }
 
         ItemUtils.interactivelyPickupItem(ref, itemStack, origin, componentAccessor);

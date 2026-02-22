@@ -1,43 +1,44 @@
 package com.hyperprotect.mixin.intercept.containers;
 
-import com.hyperprotect.mixin.bridge.FaultReporter;
-import com.hyperprotect.mixin.bridge.HookSlot;
-import com.hyperprotect.mixin.bridge.ProtectionBridge;
 import com.hypixel.hytale.builtin.crafting.component.CraftingManager;
 import com.hypixel.hytale.component.ComponentAccessor;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.asset.type.item.config.CraftingRecipe;
 import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Intercepts crafting in CraftingManager.craftItem() to check container access.
  * Uses bench position from the CraftingManager shadow fields (x, y, z).
  *
- * <p>Hook contract (container_access slot):
- * <pre>
- *   int evaluateCrafting(UUID playerUuid, String worldName, int x, int y, int z)
- *     Verdict: 0=ALLOW, 1=DENY_WITH_MESSAGE, 2=DENY_SILENT, 3=DENY_MOD_HANDLES
+ * <p>Uses {@code @Redirect} instead of {@code @Inject} to avoid runtime dependency
+ * on {@code CallbackInfo} (not on TransformingClassLoader classpath).
  *
- *   String fetchCraftingDenyReason(UUID playerUuid, String worldName, int x, int y, int z)
- *     Returns deny message or null (optional method)
- * </pre>
+ * <p>Hook contract (container_access slot, index 7):
+ * <ul>
+ *   <li>Primary: {@code int evaluateCrafting(UUID, String, int, int, int)} — returns verdict</li>
+ *   <li>Secondary: {@code String fetchCraftingDenyReason(UUID, String, int, int, int)} — returns deny reason text</li>
+ * </ul>
+ *
+ * <p>Verdict protocol: 0=ALLOW, 1=DENY_WITH_MESSAGE, 2=DENY_SILENT, 3=DENY_MOD_HANDLES.
+ * Fail-open on error.
  */
 @Mixin(CraftingManager.class)
-public class CraftingGateInterceptor {
+public abstract class CraftingGateInterceptor {
 
     @Shadow
     private int x;
@@ -48,103 +49,151 @@ public class CraftingGateInterceptor {
     @Shadow
     private int z;
 
-    @Unique
-    private static final FaultReporter FAULTS = new FaultReporter("CraftingGate");
+    @Shadow
+    private boolean isValidBenchForRecipe(Ref<EntityStore> ref,
+                                           ComponentAccessor<EntityStore> componentAccessor,
+                                           CraftingRecipe recipe) {
+        throw new AssertionError();
+    }
 
     @Unique
-    private static volatile HookSlot cachedSlot;
+    private static final AtomicLong faultCount = new AtomicLong();
+
+    @Unique
+    private static volatile Object[] hookCache;
+
+    @Unique
+    private static final MethodType EVALUATE_TYPE = MethodType.methodType(
+            int.class, UUID.class, String.class, int.class, int.class, int.class);
+
+    @Unique
+    private static final MethodType FETCH_REASON_TYPE = MethodType.methodType(
+            String.class, UUID.class, String.class, int.class, int.class, int.class);
 
     static {
         System.setProperty("hyperprotect.intercept.container_access", "true");
     }
 
     @Unique
-    private static Message formatReason(String reason) {
-        if (reason == null || reason.isEmpty()) return null;
-        Object handle = ProtectionBridge.get(ProtectionBridge.format_handle);
-        if (handle instanceof java.lang.invoke.MethodHandle mh) {
-            try { return (Message) mh.invoke(reason); } catch (Throwable ignored) {}
+    @SuppressWarnings("unchecked")
+    private static Object getBridge(int slot) {
+        try {
+            Object bridge = System.getProperties().get("hyperprotect.bridge");
+            if (bridge == null) return null;
+            return ((AtomicReferenceArray<Object>) bridge).get(slot);
+        } catch (Exception e) {
+            return null;
         }
-        return Message.raw(reason);
+    }
+
+    @Unique
+    private static void reportFault(Throwable t) {
+        long count = faultCount.incrementAndGet();
+        if (count == 1 || count % 100 == 0) {
+            System.err.println("[HyperProtect] CraftingGateInterceptor error #" + count + ": " + t);
+        }
+    }
+
+    @Unique
+    private static Object[] resolveHook() {
+        Object[] cached = hookCache;
+        Object impl = getBridge(7);
+        if (impl == null) {
+            hookCache = null;
+            return null;
+        }
+        if (cached != null && cached[0] == impl) {
+            return cached;
+        }
+        try {
+            MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                impl.getClass(), "evaluateCrafting", EVALUATE_TYPE);
+            MethodHandle secondary = null;
+            try {
+                secondary = MethodHandles.publicLookup().findVirtual(
+                    impl.getClass(), "fetchCraftingDenyReason", FETCH_REASON_TYPE);
+            } catch (NoSuchMethodException ignored) {}
+            cached = new Object[] { impl, primary, secondary };
+            hookCache = cached;
+            return cached;
+        } catch (Exception e) {
+            reportFault(e);
+            return null;
+        }
+    }
+
+    @Unique
+    private static void formatReason(Object[] hook, Player player,
+                                     UUID playerUuid, String worldName,
+                                     int x, int y, int z) {
+        try {
+            if (hook.length < 3 || hook[2] == null) return;
+            String raw = (String) ((MethodHandle) hook[2]).invoke(hook[0],
+                    playerUuid, worldName, x, y, z);
+            if (raw == null || raw.isEmpty()) return;
+            Object fmtHandle = getBridge(15);
+            if (fmtHandle instanceof MethodHandle mh) {
+                Message msg = (Message) mh.invoke(raw);
+                player.sendMessage(msg);
+            }
+        } catch (Throwable t) {
+            reportFault(t);
+        }
     }
 
     /**
-     * Inject at the start of craftItem to gate crafting access.
-     * Uses the bench position stored in the CraftingManager component fields.
+     * Redirects the isValidBenchForRecipe() call inside craftItem().
+     * If the bench is invalid, returns false (original behavior).
+     * If the bench is valid, checks the protection hook before allowing crafting.
      */
-    @Inject(
+    @Redirect(
         method = "craftItem",
-        at = @At("HEAD"),
-        cancellable = true
+        at = @At(value = "INVOKE",
+            target = "Lcom/hypixel/hytale/builtin/crafting/component/CraftingManager;isValidBenchForRecipe(Lcom/hypixel/hytale/component/Ref;Lcom/hypixel/hytale/component/ComponentAccessor;Lcom/hypixel/hytale/server/core/asset/type/item/config/CraftingRecipe;)Z")
     )
-    private void gateCraftingAccess(Ref<EntityStore> ref,
-                                    ComponentAccessor<EntityStore> componentAccessor,
-                                    CraftingRecipe recipe, int quantity,
-                                    ItemContainer itemContainer,
-                                    CallbackInfoReturnable<Boolean> cir) {
-        try {
-            HookSlot slot = cachedSlot;
+    private boolean gateCraftingAccess(CraftingManager self,
+                                       Ref<EntityStore> ref,
+                                       ComponentAccessor<EntityStore> componentAccessor,
+                                       CraftingRecipe recipe) {
+        // Call original bench validation first
+        boolean valid = this.isValidBenchForRecipe(ref, componentAccessor, recipe);
+        if (!valid) return false;
 
-            // Re-resolve if hook changed or not yet cached
-            Object current = ProtectionBridge.get(ProtectionBridge.container_access);
-            if (slot == null || slot.impl() != current) {
-                if (current == null) return; // No hook = allow
-                slot = ProtectionBridge.resolve(
-                        ProtectionBridge.container_access,
-                        "evaluateCrafting",
-                        MethodType.methodType(int.class,
-                                UUID.class, String.class, int.class, int.class, int.class),
-                        "fetchCraftingDenyReason",
-                        MethodType.methodType(String.class,
-                                UUID.class, String.class, int.class, int.class, int.class));
-                cachedSlot = slot;
-            }
+        // Check protection hook
+        try {
+            Object[] hook = resolveHook();
+            if (hook == null) return true; // No hook = allow
 
             PlayerRef playerRef = componentAccessor.getComponent(ref, PlayerRef.getComponentType());
-            if (playerRef == null) return;
+            if (playerRef == null) return true;
 
-            // Get world name from the component accessor context
             String worldName = null;
             try {
                 worldName = ((EntityStore) componentAccessor.getExternalData())
                         .getWorld().getName();
             } catch (Exception ignored) {}
-            if (worldName == null) return;
+            if (worldName == null) return true;
 
             UUID playerUuid = playerRef.getUuid();
 
-            int verdict = (int) slot.primary().invoke(
-                    slot.impl(), playerUuid, worldName,
+            int verdict = (int) ((MethodHandle) hook[1]).invoke(
+                    hook[0], playerUuid, worldName,
                     this.x, this.y, this.z);
 
-            // Fail-open for negative/unknown values
-            if (verdict < 0) return;
-
-            switch (verdict) {
-                case 0 -> { /* ALLOW */ }
-                case 1 -> {
-                    // DENY_WITH_MESSAGE — fetch reason and notify
-                    if (slot.hasSecondary()) {
-                        String reason = (String) slot.secondary().invoke(
-                                slot.impl(), playerUuid, worldName,
+            if (verdict >= 1 && verdict <= 3) {
+                if (verdict == 1) {
+                    Player player = componentAccessor.getComponent(ref, Player.getComponentType());
+                    if (player != null) {
+                        formatReason(hook, player, playerUuid, worldName,
                                 this.x, this.y, this.z);
-                        Player player = componentAccessor.getComponent(ref, Player.getComponentType());
-                        if (player != null) {
-                            Message msg = formatReason(reason);
-                            if (msg != null) player.sendMessage(msg);
-                        }
                     }
-                    cir.setReturnValue(false); // Deny crafting
                 }
-                case 2, 3 -> {
-                    // DENY_SILENT or DENY_MOD_HANDLES — deny without message
-                    cir.setReturnValue(false);
-                }
-                default -> { /* Unknown positive = allow (fail-open) */ }
+                return false; // Deny crafting
             }
         } catch (Throwable t) {
-            FAULTS.report(t);
+            reportFault(t);
             // Fail-open: allow crafting
         }
+        return true;
     }
 }

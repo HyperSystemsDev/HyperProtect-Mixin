@@ -1,8 +1,5 @@
 package com.hyperprotect.mixin.intercept.entities;
 
-import com.hyperprotect.mixin.bridge.FaultReporter;
-import com.hyperprotect.mixin.bridge.HookSlot;
-import com.hyperprotect.mixin.bridge.ProtectionBridge;
 import com.hypixel.hytale.server.spawning.SpawnTestResult;
 import com.hypixel.hytale.server.spawning.SpawningContext;
 import com.hypixel.hytale.server.spawning.spawnmarkers.SpawnMarkerEntity;
@@ -11,7 +8,11 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Intercepts spawn marker entity spawn attempts.
@@ -33,10 +34,10 @@ import java.lang.invoke.MethodType;
 public class MarkerSpawnGate {
 
     @Unique
-    private static final FaultReporter FAULTS = new FaultReporter("MarkerSpawnGate");
+    private static final AtomicLong faultCount = new AtomicLong();
 
     @Unique
-    private static volatile HookSlot cachedSlot;
+    private static volatile Object[] hookCache;
 
     @Unique
     private static final MethodType SPAWN_EVAL_TYPE = MethodType.methodType(
@@ -44,6 +45,26 @@ public class MarkerSpawnGate {
 
     static {
         System.setProperty("hyperprotect.intercept.spawn_marker", "true");
+    }
+
+    @Unique
+    @SuppressWarnings("unchecked")
+    private static Object getBridge(int slot) {
+        try {
+            Object bridge = System.getProperties().get("hyperprotect.bridge");
+            if (bridge == null) return null;
+            return ((AtomicReferenceArray<Object>) bridge).get(slot);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Unique
+    private static void reportFault(Throwable t) {
+        long count = faultCount.incrementAndGet();
+        if (count == 1 || count % 100 == 0) {
+            System.err.println("[HyperProtect] MarkerSpawnGate error #" + count + ": " + t);
+        }
     }
 
     /**
@@ -72,7 +93,7 @@ public class MarkerSpawnGate {
                 return SpawnTestResult.FAIL_NOT_SPAWNABLE;
             }
         } catch (Throwable t) {
-            FAULTS.report(t);
+            reportFault(t);
             // Fail-open: allow spawn
         }
 
@@ -86,24 +107,28 @@ public class MarkerSpawnGate {
      */
     @Unique
     private static int querySpawnVerdict(SpawningContext context) throws Throwable {
-        HookSlot slot = cachedSlot;
+        Object[] cached = hookCache;
 
         // Re-resolve if hook changed or not yet cached
-        Object current = ProtectionBridge.get(ProtectionBridge.mob_spawn);
-        if (slot == null || slot.impl() != current) {
+        Object current = getBridge(8);
+        if (cached == null || cached[0] != current) {
             if (current == null) {
-                cachedSlot = null;
+                hookCache = null;
                 // No hook: check startup behavior
                 if (!isSpawnInitialized() && !isStartupPassEnabled()) {
                     return 2; // DENY_SILENT — block spawns until ready
                 }
                 return 0;
             }
-            slot = ProtectionBridge.resolve(
-                    ProtectionBridge.mob_spawn,
-                    "evaluateCreatureSpawn",
-                    SPAWN_EVAL_TYPE);
-            cachedSlot = slot;
+            try {
+                MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                    current.getClass(), "evaluateCreatureSpawn", SPAWN_EVAL_TYPE);
+                cached = new Object[] { current, primary };
+                hookCache = cached;
+            } catch (Exception e) {
+                reportFault(e);
+                return 0;
+            }
         }
 
         String worldName = context.world != null ? context.world.getName() : null;
@@ -113,7 +138,7 @@ public class MarkerSpawnGate {
         int y = (int) context.ySpawn;
         int z = (int) context.zSpawn;
 
-        int verdict = (int) slot.primary().invoke(slot.impl(), worldName, x, y, z);
+        int verdict = (int) ((MethodHandle) cached[1]).invoke(cached[0], worldName, x, y, z);
 
         // Fail-open for negative/unknown values
         return verdict < 0 ? 0 : verdict;
@@ -121,11 +146,11 @@ public class MarkerSpawnGate {
 
     @Unique
     private static boolean isSpawnInitialized() {
-        return ProtectionBridge.flag(ProtectionBridge.spawn_ready);
+        return Boolean.TRUE.equals(getBridge(13));
     }
 
     @Unique
     private static boolean isStartupPassEnabled() {
-        return ProtectionBridge.flag(ProtectionBridge.spawn_allow_startup);
+        return Boolean.TRUE.equals(getBridge(14));
     }
 }

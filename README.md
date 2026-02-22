@@ -22,12 +22,13 @@ When a protected action occurs (block break, explosion, PvP hit, portal use, etc
 
 | | HyperProtect-Mixin | OrbisGuard-Mixins |
 |---|---|---|
-| **Hook count** | 20 hooks (31 interceptors) | 11 hooks |
+| **Hook count** | 20 hooks (22 interceptors) | 11 hooks |
 | **Bridge type** | `AtomicReferenceArray` (lock-free reads) | `ConcurrentHashMap` (lock contention) |
 | **Safety model** | Fail-open (errors allow actions) | Varies |
 | **Bypass handling** | Hook decides (no coupling to permissions) | Mixin checks permissions |
 | **Message formatting** | Built-in `&`-code formatter with hex colors | None |
 | **Feature detection** | Per-interceptor system properties | Single property |
+| **OG coexistence** | Auto-detects OG, disables conflicting mixins | No awareness of other mixin mods |
 | **Spawn protection** | Configurable startup blocking | None |
 
 ---
@@ -67,7 +68,7 @@ Protection hooks: block-break, block-place, explosion, entity-damage, ...
 ```
 1. Server starts → Hyxin loads HyperProtect-Mixin as an early plugin
 2. Plugin creates AtomicReferenceArray<Object>(24) in System.getProperties()
-3. Hyxin injects 31 mixin interceptors into server bytecode
+3. Hyxin injects 22 mixin interceptors into server bytecode
 4. Consumer mod (e.g., HyperFactions) places hook objects at slot indices
 5. Server event fires → interceptor reads hook from bridge → calls evaluate() → acts on verdict
 ```
@@ -98,7 +99,7 @@ All hooks return `int` verdicts (except `respawn` which returns `double[]` coord
 | 3 | `builder_tools` | Builder tool paste operations |
 | 18 | `block_place` | Block placement |
 | 19 | `hammer` | Hammer block cycling (CycleBlockGroupInteraction) |
-| 20 | `use` | Block state changes — doors, buttons, levers, campfires, lanterns |
+| 20 | `use` | Block state changes and interactions |
 
 ### Items (3 hooks)
 
@@ -113,7 +114,7 @@ All hooks return `int` verdicts (except `respawn` which returns `double[]` coord
 | Slot | Name | Description |
 |------|------|-------------|
 | 7 | `container_access` | Crafting/workbench access |
-| 17 | `container_open` | Storage container (chest/barrel) opening |
+| 17 | `container_open` | Storage container opening |
 
 ### Combat (1 hook)
 
@@ -196,6 +197,7 @@ HyperProtect-Mixin requires **zero configuration**. It auto-detects and initiali
 |----------|-------|---------|
 | `hyperprotect.bridge.active` | `"true"` | Bridge initialized |
 | `hyperprotect.bridge.version` | `"1.0.0"` | Bridge version |
+| `hyperprotect.mode` | `"standalone"` or `"compatible"` | Operating mode (compatible when OrbisGuard-Mixins detected) |
 | `hyperprotect.intercept.*` | `"true"` | Per-interceptor load confirmation |
 
 See [docs/feature-detection.md](docs/feature-detection.md) for the full list.
@@ -206,8 +208,8 @@ See [docs/feature-detection.md](docs/feature-detection.md) for the full list.
 
 ### Requirements
 
-- Java 21+
-- Gradle (wrapper included)
+- Java 25+
+- Gradle 9.3+ (wrapper included)
 
 ```bash
 ./gradlew jar

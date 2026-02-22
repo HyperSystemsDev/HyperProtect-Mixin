@@ -1,8 +1,5 @@
 package com.hyperprotect.mixin.intercept.items;
 
-import com.hyperprotect.mixin.bridge.FaultReporter;
-import com.hyperprotect.mixin.bridge.HookSlot;
-import com.hyperprotect.mixin.bridge.ProtectionBridge;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Resource;
 import com.hypixel.hytale.component.ResourceType;
@@ -18,14 +15,17 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Intercepts automatic item pickup in {@code PlayerItemEntityPickupSystem.tick()}.
  *
- * <p>Uses ProtectionBridge + HookSlot for cross-classloader hook resolution.
- * No internal MethodHandle caching -- HookSlot resolves eagerly.
+ * <p>Uses System.properties bridge + MethodHandle for cross-classloader hook resolution.
  *
  * <p>Hook contract (item_pickup slot):
  * <ul>
@@ -42,10 +42,10 @@ public abstract class ProximityLootInterceptor {
 
     @Unique private static final int ALLOW = 0;
 
-    // --- FaultReporter ---
+    // --- Fault tracking ---
 
     @Unique
-    private static final FaultReporter FAULTS = new FaultReporter("ProximityLootInterceptor");
+    private static final AtomicLong faultCount = new AtomicLong();
 
     // --- ThreadLocal state for capturing data across injection points ---
 
@@ -55,10 +55,10 @@ public abstract class ProximityLootInterceptor {
     @Unique
     private static final ThreadLocal<Store<EntityStore>> activeStore = new ThreadLocal<>();
 
-    // --- Cached HookSlot (volatile for cross-thread visibility) ---
+    // --- Cached hook (volatile for cross-thread visibility) ---
 
     @Unique
-    private static volatile HookSlot cachedSlot;
+    private static volatile Object[] hookCache;
 
     // --- MethodType for hook resolution ---
 
@@ -70,27 +70,49 @@ public abstract class ProximityLootInterceptor {
         System.setProperty("hyperprotect.intercept.item_pickup", "true");
     }
 
+    // --- Helper methods ---
+
+    @Unique
+    @SuppressWarnings("unchecked")
+    private static Object getBridge(int slot) {
+        try {
+            Object bridge = System.getProperties().get("hyperprotect.bridge");
+            if (bridge == null) return null;
+            return ((AtomicReferenceArray<Object>) bridge).get(slot);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Unique
+    private static void reportFault(Throwable t) {
+        long count = faultCount.incrementAndGet();
+        if (count == 1 || count % 100 == 0) {
+            System.err.println("[HyperProtect] ProximityLootInterceptor error #" + count + ": " + t);
+        }
+    }
+
     // --- Hook resolution ---
 
     @Unique
-    private static HookSlot resolveSlot() {
-        HookSlot cached = cachedSlot;
-        Object current = ProtectionBridge.get(ProtectionBridge.item_pickup);
-        if (current == null) {
-            cachedSlot = null;
+    private static Object[] resolveHook() {
+        Object[] cached = hookCache;
+        Object impl = getBridge(4);
+        if (impl == null) {
+            hookCache = null;
             return null;
         }
-        if (cached != null && cached.impl() == current) {
+        if (cached != null && cached[0] == impl) {
             return cached;
         }
         try {
-            cached = ProtectionBridge.resolve(
-                    ProtectionBridge.item_pickup,
-                    "evaluate", EVALUATE_TYPE);
-            cachedSlot = cached;
+            MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                impl.getClass(), "evaluate", EVALUATE_TYPE);
+            cached = new Object[] { impl, primary };
+            hookCache = cached;
             return cached;
         } catch (Exception e) {
-            FAULTS.report("Failed to resolve item_pickup hook", e);
+            reportFault(e);
             return null;
         }
     }
@@ -167,13 +189,13 @@ public abstract class ProximityLootInterceptor {
                 return result;
             }
 
-            HookSlot slot = resolveSlot();
-            if (slot == null) {
+            Object[] hook = resolveHook();
+            if (hook == null) {
                 return result; // No hook = allow (fail-open)
             }
 
-            int verdict = (int) slot.primary().invoke(
-                    slot.impl(), playerRef.getUuid(), worldName,
+            int verdict = (int) ((MethodHandle) hook[1]).invoke(
+                    hook[0], playerRef.getUuid(), worldName,
                     itemPos.getX(), itemPos.getY(), itemPos.getZ());
 
             // Any non-zero positive verdict = deny (silent, no messaging for auto pickup)
@@ -181,7 +203,7 @@ public abstract class ProximityLootInterceptor {
                 return null; // Cancel pickup
             }
         } catch (Throwable e) {
-            FAULTS.report(e);
+            reportFault(e);
             // Fail-open: allow pickup on error
         }
 

@@ -98,7 +98,7 @@ Intercepts hammer block cycling (variant rotation).
 
 ### Slot 20: `use`
 
-Intercepts block state changes — doors, buttons, levers, campfire toggles, lantern toggles, etc.
+Intercepts block state changes — any block with toggleable or interactive state.
 
 | Method | Signature | Return |
 |--------|-----------|--------|
@@ -107,7 +107,7 @@ Intercepts block state changes — doors, buttons, levers, campfire toggles, lan
 
 **Intercepted actions:** Block state changes via `ChangeStateInteraction.interactWithBlock()`. Covers any block that has toggleable state. Position is the target block.
 
-**Use cases:** Prevent outsiders from using doors, buttons, and levers in claimed territory. Protect interactive blocks like campfires and lanterns.
+**Use cases:** Prevent outsiders from interacting with blocks in claimed territory. Protect interactive blocks with toggleable state.
 
 ---
 
@@ -305,7 +305,7 @@ Controls command execution.
 
 ### Slot 17: `container_open`
 
-Controls container (chest/barrel/etc) opening.
+Controls storage container opening.
 
 | Method | Signature | Return |
 |--------|-----------|--------|
@@ -314,7 +314,7 @@ Controls container (chest/barrel/etc) opening.
 
 **Intercepted actions:** Container block interaction via `OpenContainerInteraction.interactWithBlock()`. Position is the container block location.
 
-**Note:** This is separate from `container_access` (slot 7) which controls crafting at workbenches. This hook controls opening storage containers (chests, barrels, etc).
+**Note:** This is separate from `container_access` (slot 7) which controls crafting at workbenches. This hook controls opening storage containers.
 
 ---
 

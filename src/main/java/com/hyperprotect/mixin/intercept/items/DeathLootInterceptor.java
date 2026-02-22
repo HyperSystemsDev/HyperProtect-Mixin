@@ -1,11 +1,10 @@
 package com.hyperprotect.mixin.intercept.items;
 
-import com.hyperprotect.mixin.bridge.FaultReporter;
-import com.hyperprotect.mixin.bridge.HookSlot;
-import com.hyperprotect.mixin.bridge.ProtectionBridge;
 import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.Component;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.protocol.GameMode;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.modules.entity.component.TransformComponent;
 import com.hypixel.hytale.server.core.modules.entity.damage.DeathComponent;
@@ -16,11 +15,15 @@ import com.hypixel.hytale.math.vector.Vector3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
+import javax.annotation.Nonnull;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Intercepts death item drops in DeathSystems.DropPlayerDeathItems.
@@ -35,74 +38,122 @@ import java.util.UUID;
  * <p>No messaging needed — death drops are a background process.
  */
 @Mixin(targets = "com.hypixel.hytale.server.core.modules.entity.damage.DeathSystems$DropPlayerDeathItems")
-public class DeathLootInterceptor {
+public abstract class DeathLootInterceptor {
 
     @Unique
-    private static final FaultReporter FAULTS = new FaultReporter("DeathLoot");
+    private static final AtomicLong faultCount = new AtomicLong();
 
     @Unique
-    private static volatile HookSlot cachedSlot;
+    private static volatile Object[] hookCache;
 
     static {
         System.setProperty("hyperprotect.intercept.death_drop", "true");
     }
 
-    /**
-     * Inject at the start of onComponentAdded to evaluate whether drops should be kept.
-     * If the hook returns a non-zero verdict, cancel to keep inventory.
-     */
-    @Inject(
-        method = "onComponentAdded",
-        at = @At("HEAD"),
-        cancellable = true
-    )
-    private void gateDeathDrops(Ref<EntityStore> ref, DeathComponent component,
-                                Store<EntityStore> store,
-                                CommandBuffer<EntityStore> commandBuffer,
-                                CallbackInfo ci) {
+    @Unique
+    @SuppressWarnings("unchecked")
+    private static Object getBridge(int slot) {
         try {
-            HookSlot slot = cachedSlot;
+            Object bridge = System.getProperties().get("hyperprotect.bridge");
+            if (bridge == null) return null;
+            return ((AtomicReferenceArray<Object>) bridge).get(slot);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
-            // Re-resolve if hook changed or not yet cached
-            Object current = ProtectionBridge.get(ProtectionBridge.death_drop);
-            if (slot == null || slot.impl() != current) {
-                if (current == null) return; // No hook = allow (drop normally)
-                slot = ProtectionBridge.resolve(
-                        ProtectionBridge.death_drop,
-                        "evaluateDeathLoot",
-                        MethodType.methodType(int.class,
-                                UUID.class, String.class, int.class, int.class, int.class));
-                cachedSlot = slot;
-            }
+    @Unique
+    private static void reportFault(Throwable t) {
+        long count = faultCount.incrementAndGet();
+        if (count == 1 || count % 100 == 0) {
+            System.err.println("[HyperProtect] DeathLootInterceptor error #" + count + ": " + t);
+        }
+    }
 
-            // Need player context to evaluate
-            Player player = store.getComponent(ref, Player.getComponentType());
-            if (player == null) return;
+    @Unique
+    private static Object[] resolveHook() {
+        Object[] cached = hookCache;
+        Object impl = getBridge(5);
+        if (impl == null) {
+            hookCache = null;
+            return null;
+        }
+        if (cached != null && cached[0] == impl) {
+            return cached;
+        }
+        try {
+            MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                impl.getClass(), "evaluateDeathLoot",
+                MethodType.methodType(int.class,
+                        UUID.class, String.class, int.class, int.class, int.class));
+            cached = new Object[] { impl, primary };
+            hookCache = cached;
+            return cached;
+        } catch (Exception e) {
+            reportFault(e);
+            return null;
+        }
+    }
 
-            PlayerRef playerRef = store.getComponent(ref, PlayerRef.getComponentType());
-            if (playerRef == null) return;
+    /**
+     * Redirect store.getComponent(ref, Player.getComponentType()) in onComponentAdded.
+     * The original method calls this early and null-checks: if null, returns.
+     * Also, the next check is playerComponent.getGameMode() == Creative, which also returns.
+     * We return null when the hook denies, causing the original to exit immediately.
+     */
+    @Redirect(
+        method = "onComponentAdded",
+        at = @At(value = "INVOKE",
+            target = "Lcom/hypixel/hytale/component/Store;getComponent(Lcom/hypixel/hytale/component/Ref;Lcom/hypixel/hytale/component/ComponentType;)Lcom/hypixel/hytale/component/Component;",
+            ordinal = 0)
+    )
+    private <S, T extends Component<S>> T gateDeathDrops(Store<S> store, Ref<S> ref,
+                                     com.hypixel.hytale.component.ComponentType<S, T> componentType,
+                                     @Nonnull Ref<EntityStore> entityRef,
+                                     @Nonnull DeathComponent component,
+                                     @Nonnull Store<EntityStore> entityStore,
+                                     @Nonnull CommandBuffer<EntityStore> commandBuffer) {
+        // Call the original method
+        @SuppressWarnings("unchecked")
+        T result = store.getComponent(ref, componentType);
 
-            World world = store.getExternalData().getWorld();
+        if (result == null) return null; // Let original handle it
+
+        try {
+            Object[] hook = resolveHook();
+            if (hook == null) return result; // No hook = allow (drop normally)
+
+            // Get player context
+            @SuppressWarnings("unchecked")
+            Store<EntityStore> typedStore = (Store<EntityStore>) store;
+            @SuppressWarnings("unchecked")
+            Ref<EntityStore> typedRef = (Ref<EntityStore>) ref;
+
+            PlayerRef playerRef = typedStore.getComponent(typedRef, PlayerRef.getComponentType());
+            if (playerRef == null) return result;
+
+            World world = typedStore.getExternalData().getWorld();
             String worldName = world != null ? world.getName() : null;
-            if (worldName == null) return;
+            if (worldName == null) return result;
 
-            TransformComponent transform = store.getComponent(ref, TransformComponent.getComponentType());
-            if (transform == null) return;
+            TransformComponent transform = typedStore.getComponent(typedRef, TransformComponent.getComponentType());
+            if (transform == null) return result;
 
             Vector3d pos = transform.getPosition();
             UUID playerUuid = playerRef.getUuid();
 
-            int verdict = (int) slot.primary().invoke(
-                    slot.impl(), playerUuid, worldName,
+            int verdict = (int) ((MethodHandle) hook[1]).invoke(
+                    hook[0], playerUuid, worldName,
                     (int) pos.getX(), (int) pos.getY(), (int) pos.getZ());
 
             // Verdict 0 = ALLOW (drop normally), anything else = keep inventory
             if (verdict != 0) {
-                ci.cancel(); // Keep inventory — skip all death drops
+                return null; // Return null to trigger early exit — keep inventory
             }
         } catch (Throwable t) {
-            FAULTS.report(t);
+            reportFault(t);
             // Fail-open: drop items normally
         }
+        return result;
     }
 }

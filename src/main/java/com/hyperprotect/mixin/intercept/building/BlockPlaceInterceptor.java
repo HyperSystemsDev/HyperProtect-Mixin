@@ -1,35 +1,40 @@
 package com.hyperprotect.mixin.intercept.building;
 
-import com.hyperprotect.mixin.bridge.FaultReporter;
-import com.hyperprotect.mixin.bridge.HookSlot;
-import com.hyperprotect.mixin.bridge.ProtectionBridge;
-import com.hypixel.hytale.component.CommandBuffer;
+import com.hypixel.hytale.component.ComponentAccessor;
 import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.protocol.BlockPosition;
+import com.hypixel.hytale.math.vector.Vector3i;
+import com.hypixel.hytale.protocol.BlockRotation;
 import com.hypixel.hytale.protocol.InteractionState;
-import com.hypixel.hytale.protocol.InteractionSyncData;
-import com.hypixel.hytale.protocol.InteractionType;
 import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.InteractionContext;
 import com.hypixel.hytale.server.core.entity.entities.Player;
-import com.hypixel.hytale.server.core.modules.interaction.interaction.CooldownHandler;
+import com.hypixel.hytale.server.core.inventory.Inventory;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.modules.interaction.BlockPlaceUtils;
 import com.hypixel.hytale.server.core.modules.interaction.interaction.config.client.PlaceBlockInteraction;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.Redirect;
 
-import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Intercepts block placement in PlaceBlockInteraction.tick0().
+ *
+ * <p>Uses two {@code @Redirect} points instead of {@code @Inject} to avoid
+ * runtime dependency on {@code CallbackInfo} (not on TransformingClassLoader classpath).
  *
  * <p>Hook contract (block_place slot, index 18):
  * <ul>
@@ -44,10 +49,10 @@ import java.util.UUID;
 public class BlockPlaceInterceptor {
 
     @Unique
-    private static final FaultReporter FAULTS = new FaultReporter("BlockPlaceInterceptor");
+    private static final AtomicLong faultCount = new AtomicLong();
 
     @Unique
-    private static volatile HookSlot cachedSlot;
+    private static volatile Object[] hookCache;
 
     @Unique
     private static final MethodType EVALUATE_TYPE = MethodType.methodType(
@@ -57,14 +62,39 @@ public class BlockPlaceInterceptor {
     private static final MethodType FETCH_REASON_TYPE = MethodType.methodType(
             String.class, UUID.class, String.class, int.class, int.class, int.class);
 
+    @Unique
+    private static final ThreadLocal<InteractionContext> capturedContext = new ThreadLocal<>();
+
     static {
         System.setProperty("hyperprotect.intercept.block_place", "true");
+    }
+
+    // --- Helper methods ---
+
+    @Unique
+    @SuppressWarnings("unchecked")
+    private static Object getBridge(int slot) {
+        try {
+            Object bridge = System.getProperties().get("hyperprotect.bridge");
+            if (bridge == null) return null;
+            return ((AtomicReferenceArray<Object>) bridge).get(slot);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Unique
+    private static void reportFault(Throwable t) {
+        long count = faultCount.incrementAndGet();
+        if (count == 1 || count % 100 == 0) {
+            System.err.println("[HyperProtect] BlockPlaceInterceptor error #" + count + ": " + t);
+        }
     }
 
     @Unique
     private static Message formatReason(String reason) {
         if (reason == null || reason.isEmpty()) return null;
-        Object handle = ProtectionBridge.get(ProtectionBridge.format_handle);
+        Object handle = getBridge(15); // format_handle = 15
         if (handle instanceof MethodHandle mh) {
             try { return (Message) mh.invoke(reason); } catch (Throwable ignored) {}
         }
@@ -72,86 +102,116 @@ public class BlockPlaceInterceptor {
     }
 
     @Unique
-    private static HookSlot resolveSlot() {
-        HookSlot cached = cachedSlot;
-        Object current = ProtectionBridge.get(ProtectionBridge.block_place);
-        if (current == null) {
-            cachedSlot = null;
+    private static Object[] resolveHook() {
+        Object[] cached = hookCache;
+        Object impl = getBridge(18); // block_place = 18
+        if (impl == null) {
+            hookCache = null;
             return null;
         }
-        if (cached != null && cached.impl() == current) {
+        if (cached != null && cached[0] == impl) {
             return cached;
         }
         try {
-            cached = ProtectionBridge.resolve(
-                    ProtectionBridge.block_place,
-                    "evaluateBlockPlace", EVALUATE_TYPE,
-                    "fetchBlockPlaceDenyReason", FETCH_REASON_TYPE);
-            cachedSlot = cached;
+            MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                impl.getClass(), "evaluateBlockPlace", EVALUATE_TYPE);
+            MethodHandle secondary = null;
+            try {
+                secondary = MethodHandles.publicLookup().findVirtual(
+                    impl.getClass(), "fetchBlockPlaceDenyReason", FETCH_REASON_TYPE);
+            } catch (NoSuchMethodException ignored) {}
+            cached = new Object[] { impl, primary, secondary };
+            hookCache = cached;
             return cached;
         } catch (Exception e) {
-            FAULTS.report("Failed to resolve block_place hook", e);
+            reportFault(e);
             return null;
         }
     }
 
-    @Inject(
+    // --- Redirect 1: Capture InteractionContext ---
+
+    /**
+     * Captures the InteractionContext for use in the placeBlock redirect.
+     * Redirects context.getEntity() which is called once in tick0 before the placement.
+     */
+    @Redirect(
         method = "tick0",
-        at = @At("HEAD"),
-        cancellable = true
+        at = @At(value = "INVOKE",
+            target = "Lcom/hypixel/hytale/server/core/entity/InteractionContext;getEntity()Lcom/hypixel/hytale/component/Ref;")
     )
-    private void gateBlockPlace(boolean firstRun, float time,
-                                @Nonnull InteractionType type,
-                                @Nonnull InteractionContext context,
-                                @Nonnull CooldownHandler cooldownHandler,
-                                CallbackInfo ci) {
-        if (!firstRun) return; // Only check on the initial placement tick
+    private Ref<EntityStore> captureContext(InteractionContext ctx) {
+        capturedContext.set(ctx);
+        return ctx.getEntity();
+    }
 
+    // --- Redirect 2: Gate block placement ---
+
+    /**
+     * Intercepts BlockPlaceUtils.placeBlock() to evaluate protection permissions.
+     * If denied, skips placement, sets interaction state to Failed, and sends denial message.
+     */
+    @Redirect(
+        method = "tick0",
+        at = @At(value = "INVOKE",
+            target = "Lcom/hypixel/hytale/server/core/modules/interaction/BlockPlaceUtils;placeBlock(Lcom/hypixel/hytale/component/Ref;Lcom/hypixel/hytale/server/core/inventory/ItemStack;Ljava/lang/String;Lcom/hypixel/hytale/server/core/inventory/container/ItemContainer;Lcom/hypixel/hytale/math/vector/Vector3i;Lcom/hypixel/hytale/math/vector/Vector3i;Lcom/hypixel/hytale/protocol/BlockRotation;Lcom/hypixel/hytale/server/core/inventory/Inventory;BZLcom/hypixel/hytale/component/Ref;Lcom/hypixel/hytale/component/ComponentAccessor;Lcom/hypixel/hytale/component/ComponentAccessor;)V")
+    )
+    private void gatePlaceBlock(Ref<EntityStore> ref,
+                                ItemStack itemStack,
+                                @Nullable String blockTypeKey,
+                                ItemContainer itemContainer,
+                                Vector3i placementNormal,
+                                Vector3i blockPosition,
+                                BlockRotation blockRotation,
+                                @Nullable Inventory inventory,
+                                byte activeSlot,
+                                boolean removeItemInHand,
+                                Ref<ChunkStore> chunkReference,
+                                ComponentAccessor<ChunkStore> chunkStore,
+                                ComponentAccessor<EntityStore> entityStore) {
         try {
-            HookSlot slot = resolveSlot();
-            if (slot == null) return;
+            Object[] hook = resolveHook();
+            if (hook != null) {
+                PlayerRef playerRef = entityStore.getComponent(ref, PlayerRef.getComponentType());
+                if (playerRef != null) {
+                    UUID playerUuid = playerRef.getUuid();
+                    World world = ((EntityStore) entityStore.getExternalData()).getWorld();
+                    String worldName = world != null ? world.getName() : "";
 
-            InteractionSyncData clientState = context.getClientState();
-            if (clientState == null) return;
-            BlockPosition blockPosition = clientState.blockPosition;
-            if (blockPosition == null) return;
+                    int verdict = (int) ((MethodHandle) hook[1]).invoke(
+                            hook[0], playerUuid, worldName,
+                            blockPosition.getX(), blockPosition.getY(), blockPosition.getZ());
 
-            Ref<EntityStore> ref = context.getEntity();
-            CommandBuffer<EntityStore> commandBuffer = context.getCommandBuffer();
-            if (commandBuffer == null) return;
+                    if (verdict == 1 || verdict == 2 || verdict == 3) {
+                        // Denied — send message if DENY_WITH_MESSAGE
+                        if (verdict == 1 && hook.length >= 3 && hook[2] != null) {
+                            String reason = (String) ((MethodHandle) hook[2]).invoke(
+                                    hook[0], playerUuid, worldName,
+                                    blockPosition.getX(), blockPosition.getY(), blockPosition.getZ());
+                            Player player = entityStore.getComponent(ref, Player.getComponentType());
+                            if (player != null) {
+                                Message msg = formatReason(reason);
+                                if (msg != null) player.sendMessage(msg);
+                            }
+                        }
 
-            PlayerRef playerRef = commandBuffer.getComponent(ref, PlayerRef.getComponentType());
-            if (playerRef == null) return;
-
-            World world = commandBuffer.getExternalData().getWorld();
-            if (world == null) return;
-
-            UUID playerUuid = playerRef.getUuid();
-            String worldName = world.getName();
-
-            int verdict = (int) slot.primary().invoke(
-                    slot.impl(), playerUuid, worldName,
-                    blockPosition.x, blockPosition.y, blockPosition.z);
-
-            if (verdict < 0) return; // Fail-open for negative/unknown values
-
-            if (verdict == 1 || verdict == 2 || verdict == 3) {
-                if (verdict == 1 && slot.hasSecondary()) {
-                    String reason = (String) slot.secondary().invoke(
-                            slot.impl(), playerUuid, worldName,
-                            blockPosition.x, blockPosition.y, blockPosition.z);
-                    Player player = commandBuffer.getComponent(ref, Player.getComponentType());
-                    if (player != null) {
-                        Message msg = formatReason(reason);
-                        if (msg != null) player.sendMessage(msg);
+                        // Set interaction state to Failed via captured context
+                        InteractionContext ctx = capturedContext.get();
+                        if (ctx != null) {
+                            ctx.getState().state = InteractionState.Failed;
+                        }
+                        return; // Skip placement
                     }
                 }
-                context.getState().state = InteractionState.Failed;
-                ci.cancel();
             }
         } catch (Throwable t) {
-            FAULTS.report(t);
-            // Fail-open: allow block placement
+            reportFault(t);
+            // Fail-open: proceed with placement
         }
+
+        // Allowed — call original
+        BlockPlaceUtils.placeBlock(ref, itemStack, blockTypeKey, itemContainer,
+                placementNormal, blockPosition, blockRotation, inventory,
+                activeSlot, removeItemInHand, chunkReference, chunkStore, entityStore);
     }
 }

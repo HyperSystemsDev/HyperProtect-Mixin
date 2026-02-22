@@ -1,8 +1,5 @@
 package com.hyperprotect.mixin.intercept.entities;
 
-import com.hyperprotect.mixin.bridge.FaultReporter;
-import com.hyperprotect.mixin.bridge.HookSlot;
-import com.hyperprotect.mixin.bridge.ProtectionBridge;
 import com.hypixel.hytale.component.AddReason;
 import com.hypixel.hytale.component.Holder;
 import com.hypixel.hytale.component.Ref;
@@ -14,7 +11,11 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Intercepts entity loading from saved data via Store.addEntity() with LOAD reason.
@@ -34,10 +35,10 @@ import java.lang.invoke.MethodType;
 public class EntityLoadGate {
 
     @Unique
-    private static final FaultReporter FAULTS = new FaultReporter("EntityLoadGate");
+    private static final AtomicLong faultCount = new AtomicLong();
 
     @Unique
-    private static volatile HookSlot cachedSlot;
+    private static volatile Object[] hookCache;
 
     @Unique
     private static final MethodType SPAWN_EVAL_TYPE = MethodType.methodType(
@@ -45,6 +46,26 @@ public class EntityLoadGate {
 
     static {
         System.setProperty("hyperprotect.intercept.entity_load", "true");
+    }
+
+    @Unique
+    @SuppressWarnings("unchecked")
+    private static Object getBridge(int slot) {
+        try {
+            Object bridge = System.getProperties().get("hyperprotect.bridge");
+            if (bridge == null) return null;
+            return ((AtomicReferenceArray<Object>) bridge).get(slot);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Unique
+    private static void reportFault(Throwable t) {
+        long count = faultCount.incrementAndGet();
+        if (count == 1 || count % 100 == 0) {
+            System.err.println("[HyperProtect] EntityLoadGate error #" + count + ": " + t);
+        }
     }
 
     /**
@@ -74,7 +95,7 @@ public class EntityLoadGate {
                 return null; // Block entity load
             }
         } catch (Throwable t) {
-            FAULTS.report(t);
+            reportFault(t);
             // Fail-open: allow load
         }
 
@@ -88,20 +109,24 @@ public class EntityLoadGate {
      */
     @Unique
     private static int queryLoadVerdict(Store store) throws Throwable {
-        HookSlot slot = cachedSlot;
+        Object[] cached = hookCache;
 
         // Re-resolve if hook changed or not yet cached
-        Object current = ProtectionBridge.get(ProtectionBridge.mob_spawn);
-        if (slot == null || slot.impl() != current) {
+        Object current = getBridge(8);
+        if (cached == null || cached[0] != current) {
             if (current == null) {
-                cachedSlot = null;
+                hookCache = null;
                 return 0; // No hook = allow
             }
-            slot = ProtectionBridge.resolve(
-                    ProtectionBridge.mob_spawn,
-                    "evaluateCreatureSpawn",
-                    SPAWN_EVAL_TYPE);
-            cachedSlot = slot;
+            try {
+                MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                    current.getClass(), "evaluateCreatureSpawn", SPAWN_EVAL_TYPE);
+                cached = new Object[] { current, primary };
+                hookCache = cached;
+            } catch (Exception e) {
+                reportFault(e);
+                return 0;
+            }
         }
 
         // Check if this is an EntityStore with a world context
@@ -116,7 +141,7 @@ public class EntityLoadGate {
         String worldName = world.getName();
 
         // Entity load position not available — pass 0,0,0
-        int verdict = (int) slot.primary().invoke(slot.impl(), worldName, 0, 0, 0);
+        int verdict = (int) ((MethodHandle) cached[1]).invoke(cached[0], worldName, 0, 0, 0);
 
         // Fail-open for negative/unknown values
         return verdict < 0 ? 0 : verdict;

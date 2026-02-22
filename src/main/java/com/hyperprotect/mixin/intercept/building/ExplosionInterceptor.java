@@ -1,8 +1,5 @@
 package com.hyperprotect.mixin.intercept.building;
 
-import com.hyperprotect.mixin.bridge.FaultReporter;
-import com.hyperprotect.mixin.bridge.HookSlot;
-import com.hyperprotect.mixin.bridge.ProtectionBridge;
 import com.hypixel.hytale.component.ComponentAccessor;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.math.vector.Vector3i;
@@ -20,7 +17,11 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 /**
  * Intercepts explosion block damage in BlockHarvestUtils.performBlockDamage().
@@ -38,13 +39,35 @@ import java.lang.invoke.MethodType;
 public class ExplosionInterceptor {
 
     @Unique
-    private static final FaultReporter FAULTS = new FaultReporter("ExplosionInterceptor");
+    private static final AtomicLong faultCount = new AtomicLong();
 
     @Unique
-    private static volatile HookSlot cachedSlot;
+    private static volatile Object[] hookCache;
 
     static {
         System.setProperty("hyperprotect.intercept.explosion", "true");
+    }
+
+    // --- Helper methods ---
+
+    @Unique
+    @SuppressWarnings("unchecked")
+    private static Object getBridge(int slot) {
+        try {
+            Object bridge = System.getProperties().get("hyperprotect.bridge");
+            if (bridge == null) return null;
+            return ((AtomicReferenceArray<Object>) bridge).get(slot);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Unique
+    private static void reportFault(Throwable t) {
+        long count = faultCount.incrementAndGet();
+        if (count == 1 || count % 100 == 0) {
+            System.err.println("[HyperProtect] ExplosionInterceptor error #" + count + ": " + t);
+        }
     }
 
     @Redirect(
@@ -76,7 +99,7 @@ public class ExplosionInterceptor {
                     return false; // Block the explosion damage
                 }
             } catch (Throwable t) {
-                FAULTS.report(t);
+                reportFault(t);
                 // Fail-open: allow explosion
             }
         }
@@ -95,24 +118,29 @@ public class ExplosionInterceptor {
     @Unique
     private static int queryExplosionVerdict(ComponentAccessor<EntityStore> entityStore,
                                              Vector3i targetBlockPos) throws Throwable {
-        HookSlot slot = cachedSlot;
+        Object[] cached = hookCache;
 
         // Re-resolve if hook changed or not yet cached
-        Object current = ProtectionBridge.get(ProtectionBridge.explosion);
-        if (slot == null || slot.impl() != current) {
+        Object current = getBridge(1); // explosion = 1
+        if (cached == null || cached[0] != current) {
             if (current == null) return 0; // No hook = allow
-            slot = ProtectionBridge.resolve(
-                    ProtectionBridge.explosion,
-                    "evaluateExplosion",
+            try {
+                MethodHandle primary = MethodHandles.publicLookup().findVirtual(
+                    current.getClass(), "evaluateExplosion",
                     MethodType.methodType(int.class, World.class, int.class, int.class, int.class));
-            cachedSlot = slot;
+                cached = new Object[] { current, primary };
+                hookCache = cached;
+            } catch (Exception e) {
+                reportFault(e);
+                return 0;
+            }
         }
 
         World world = ((EntityStore) entityStore.getExternalData()).getWorld();
         if (world == null) return 0;
 
-        int verdict = (int) slot.primary().invoke(
-                slot.impl(), world,
+        int verdict = (int) ((MethodHandle) cached[1]).invoke(
+                cached[0], world,
                 targetBlockPos.getX(), targetBlockPos.getY(), targetBlockPos.getZ());
 
         // Fail-open for negative/unknown values
