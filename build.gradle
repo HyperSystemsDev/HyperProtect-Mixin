@@ -1,0 +1,39 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.hyperprotect'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Hytale Server API
+    compileOnly files('libs/HytaleServer.jar')
+
+    // Hyxin mixin framework
+    compileOnly files('libs/Hyxin-0.0.11-all.jar')
+
+    // Annotations
+    compileOnly 'org.jetbrains:annotations:24.1.0'
+}
+
+jar {
+    archiveBaseName = 'HyperProtect-Mixin'
+    archiveVersion = version
+    archiveClassifier = ''
+
+    manifest {
+        attributes(
+            'Implementation-Title': 'HyperProtect-Mixin',
+            'Implementation-Version': version
+        )
+    }
+}

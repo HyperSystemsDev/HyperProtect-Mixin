@@ -1,0 +1,126 @@
+name: Bug Report
+description: Report a crash, hook failure, or bridge issue with HyperProtect-Mixin.
+title: "[Bug]: "
+labels: ["bug"]
+type: bug
+body:
+  - type: input
+    id: pluginVersion
+    attributes:
+      label: Plugin Version
+      description: The version of HyperProtect-Mixin you have installed
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: hyxinVersion
+    attributes:
+      label: Hyxin Version
+      description: The version of Hyxin you are using
+      placeholder: 0.0.11
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: Select the operating system where you are experiencing the issue.
+      multiple: false
+      options:
+        - Linux (Debian/Ubuntu)
+        - Linux (RedHat/CentOS)
+        - Linux (Other)
+        - Windows 11
+        - Docker/Podman/LXC
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Issue Category
+      description: What type of issue are you experiencing?
+      multiple: false
+      options:
+        - Server crash / NullPointerException
+        - Hook not firing (interceptor not working)
+        - Bridge registration failure
+        - Mixin injection failure
+        - Incorrect verdict behavior (wrong allow/deny)
+        - Message formatting issue
+        - Performance / lag
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Bug Description
+      description: Provide a clear and concise description of the issue or unexpected behavior.
+      placeholder: When a player breaks a block in claimed territory, the block_break hook is not called.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to Reproduce
+      description: Provide a detailed, step-by-step guide on how to reproduce the issue.
+      placeholder: |
+        Example:
+          1. Place HyperProtect-Mixin in earlyplugins/
+          2. Start server with --accept-early-plugins
+          3. Register a block_break hook from a consumer mod
+          4. Break a block in a protected area
+          5. Hook is not called, block breaks normally
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected Behavior
+      description: Provide a detailed explanation of what you expected to happen instead of the observed issue. Be as specific as possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: If available, please provide the logs that may apply to this issue from the server console. Include any mixin injection errors or bridge initialization messages.
+      render: shell
+
+  - type: textarea
+    id: codeSnippets
+    attributes:
+      label: Hook Registration Code
+      description: If applicable, share the code you use to register hooks with the bridge.
+      render: java
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Media
+      description: If available, please upload screenshots or videos to illustrate the issue.
+
+  - type: textarea
+    id: informationContext
+    attributes:
+      label: Additional information
+      description: If available, please add any additional information you may find useful to help us understand the issue, such as list of installed mods/early plugins and consumer mod details.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Confirmation Checklist
+      options:
+        - label: I have checked the existing [issues](https://github.com/HyperSystemsDev/HyperProtect-Mixin/issues) for duplicates.
+          required: true
+
+        - label: I have verified `--accept-early-plugins` is in my server start script.
+          required: true
+
+        - label: I agree to follow this project's [Code of Conduct](https://github.com/HyperSystemsDev/HyperProtect-Mixin/blob/main/CODE_OF_CONDUCT.md).
+          required: true

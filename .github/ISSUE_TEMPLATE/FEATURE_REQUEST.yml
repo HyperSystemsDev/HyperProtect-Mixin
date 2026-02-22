@@ -1,0 +1,62 @@
+name: Feature Request
+description: Request a new hook, interceptor, or bridge enhancement.
+title: "[Feat] "
+labels: ["enhancement"]
+type: feature
+body:
+  - type: textarea
+    attributes:
+      label: Scope
+      description: Provide a short summary of what this feature should encompass.
+      placeholder: |
+        Example:
+          1. Add a new hook for player item drop (F-key)
+          2. Hook should provide player UUID, world name, and position
+          3. Should follow the standard verdict protocol (0/1/2/3)
+          4. Should support deny messages via fetch*DenyReason
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Implementation Details
+      description: Provide a moderate level of detail on how you would envision this feature being implemented.
+      placeholder: |
+        Example:
+          1. Target class for mixin injection: ItemDropInteraction
+          2. Injection point: interactWithBlock HEAD
+          3. Suggested hook method signature:
+             - `int evaluateItemDrop(UUID playerUuid, String worldName, int x, int y, int z)`
+             - `String fetchItemDropDenyReason(UUID playerUuid, String worldName, int x, int y, int z)`
+          4. Suggested bridge slot index: next available (23)
+          5. System property: `hyperprotect.intercept.item_drop`
+
+  - type: textarea
+    attributes:
+      label: Risks and Alternatives
+      description: Provide a simple analysis of potential risks, challenges, and alternative approaches to implementing this feature.
+      placeholder: |
+        Example:
+          1. Risk: Injecting into this class may conflict with other mixins.
+          2. Challenge: The target method may not expose the player reference directly.
+          3. Alternative: Could be implemented as a sub-hook of the existing use hook.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: References and Media
+      description: Provide any relevant references, links, images, or other media that support this feature request.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Confirmation Checklist
+      options:
+        - label: I have checked the existing [issues](https://github.com/HyperSystemsDev/HyperProtect-Mixin/issues) for duplicates.
+          required: true
+
+        - label: I agree to follow this project's [Code of Conduct](https://github.com/HyperSystemsDev/HyperProtect-Mixin/blob/main/CODE_OF_CONDUCT.md).
+          required: true

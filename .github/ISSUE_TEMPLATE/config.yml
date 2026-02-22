@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Join the HyperSystems Discord
+    url: https://discord.gg/SNPjyfkYPc
+    about: Come and chat with other players and the HyperSystems team!
+  - name: HyperSystems Website
+    url: https://hypersystems.dev
+    about: Visit our website for more information about HyperSystems.
+  - name: "HyperProtect-Mixin Documentation"
+    url: "https://github.com/HyperSystemsDev/HyperProtect-Mixin/tree/main/docs"
+    about: "Find guides and documentation for HyperProtect-Mixin."

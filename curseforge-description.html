@@ -1,0 +1,223 @@
+<h2><span style="color: #5b8def;">HyperProtect-Mixin</span> - Server-Level Event Interception for Hytale</h2>
+<p>Intercept. Protect. Extend. <strong>HyperProtect-Mixin</strong> injects <span style="color: #5b8def;">20 protection hooks</span> into the Hytale server via <span style="color: #5b8def;">Hyxin bytecode mixins</span>, exposing them through a <span style="color: #5b8def;">lock-free bridge API</span> that any mod can consume &mdash; no compile-time dependency required.</p>
+<p>Zero configuration. Fail-open safety. Drop it in and your protection mod handles the rest.</p>
+<p>&nbsp;</p>
+
+<h2><span style="color: #f0b232;">Why HyperProtect-Mixin?</span></h2>
+<ul>
+    <li><strong><span style="color: #f0b232;">20 Protection Hooks</span></strong> - Comprehensive coverage across building, combat, items, entities, containers, transport, commands, and logging</li>
+    <li><strong><span style="color: #f0b232;">31 Mixin Interceptors</span></strong> - Multiple injection points per hook for thorough event capture (e.g., 4 spawn interceptors, 6 portal interceptors)</li>
+    <li><strong><span style="color: #f0b232;">Lock-Free Bridge</span></strong> - <code>AtomicReferenceArray</code> with zero-contention reads &mdash; no ConcurrentHashMap overhead</li>
+    <li><strong><span style="color: #f0b232;">Fail-Open Safety</span></strong> - Errors, missing hooks, or negative verdicts always allow actions &mdash; never locks players out</li>
+    <li><strong><span style="color: #f0b232;">Zero Configuration</span></strong> - Auto-initializes on server startup. No config files needed.</li>
+    <li><strong><span style="color: #f0b232;">No Compile-Time Dependency</span></strong> - Consumer mods register hooks via <code>System.getProperties()</code> &mdash; works across classloader boundaries</li>
+</ul>
+<p>&nbsp;</p>
+
+<h2><span style="color: #e06c75;">Comparison with OrbisGuard-Mixins</span></h2>
+<table>
+    <thead>
+    <tr>
+        <th></th>
+        <th>HyperProtect-Mixin</th>
+        <th>OrbisGuard-Mixins</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td><strong>Hook Count</strong></td>
+        <td><span style="color: #98c379;">20 hooks (31 interceptors)</span></td>
+        <td>11 hooks</td>
+    </tr>
+    <tr>
+        <td><strong>Bridge Type</strong></td>
+        <td><span style="color: #98c379;">AtomicReferenceArray (lock-free)</span></td>
+        <td>ConcurrentHashMap</td>
+    </tr>
+    <tr>
+        <td><strong>Safety Model</strong></td>
+        <td><span style="color: #98c379;">Fail-open (errors = allow)</span></td>
+        <td>Varies</td>
+    </tr>
+    <tr>
+        <td><strong>Bypass Handling</strong></td>
+        <td><span style="color: #98c379;">Hook decides (decoupled)</span></td>
+        <td>Mixin checks permissions</td>
+    </tr>
+    <tr>
+        <td><strong>Message Formatting</strong></td>
+        <td><span style="color: #98c379;">Built-in &amp;-code + hex colors</span></td>
+        <td>None</td>
+    </tr>
+    <tr>
+        <td><strong>Feature Detection</strong></td>
+        <td><span style="color: #98c379;">Per-interceptor properties</span></td>
+        <td>Single property</td>
+    </tr>
+    <tr>
+        <td><strong>Spawn Protection</strong></td>
+        <td><span style="color: #98c379;">Configurable startup blocking</span></td>
+        <td>None</td>
+    </tr>
+    </tbody>
+</table>
+<p>&nbsp;</p>
+
+<h2><span style="color: #5b8def;">Hook Coverage</span></h2>
+
+<h3><span style="color: #d19a66;">Building (7 hooks)</span></h3>
+<ul>
+    <li><strong><span style="color: #61afef;">block_break</span></strong> (slot 0) &mdash; Block harvesting and interactive item pickup</li>
+    <li><strong><span style="color: #61afef;">explosion</span></strong> (slot 1) &mdash; Explosion block damage</li>
+    <li><strong><span style="color: #61afef;">fire_spread</span></strong> (slot 2) &mdash; Fire fluid spreading</li>
+    <li><strong><span style="color: #61afef;">builder_tools</span></strong> (slot 3) &mdash; Builder tool paste operations</li>
+    <li><strong><span style="color: #61afef;">block_place</span></strong> (slot 18) &mdash; Block placement</li>
+    <li><strong><span style="color: #61afef;">hammer</span></strong> (slot 19) &mdash; Hammer block cycling (variant rotation)</li>
+    <li><strong><span style="color: #61afef;">use</span></strong> (slot 20) &mdash; Block state changes (doors, buttons, levers, campfires, lanterns)</li>
+</ul>
+
+<h3><span style="color: #c678dd;">Items (3 hooks)</span></h3>
+<ul>
+    <li><strong><span style="color: #61afef;">item_pickup</span></strong> (slot 4) &mdash; Proximity item pickup</li>
+    <li><strong><span style="color: #61afef;">death_drop</span></strong> (slot 5) &mdash; Keep-inventory-on-death behavior</li>
+    <li><strong><span style="color: #61afef;">durability</span></strong> (slot 6) &mdash; Item durability loss prevention</li>
+</ul>
+
+<h3><span style="color: #56b6c2;">Containers (2 hooks)</span></h3>
+<ul>
+    <li><strong><span style="color: #61afef;">container_access</span></strong> (slot 7) &mdash; Crafting/workbench access</li>
+    <li><strong><span style="color: #61afef;">container_open</span></strong> (slot 17) &mdash; Storage container (chest/barrel) opening</li>
+</ul>
+
+<h3><span style="color: #e06c75;">Combat (1 hook)</span></h3>
+<ul>
+    <li><strong><span style="color: #61afef;">entity_damage</span></strong> (slot 16) &mdash; Player-initiated damage (PvP and PvE)</li>
+</ul>
+
+<h3><span style="color: #98c379;">Entities (2 hooks)</span></h3>
+<ul>
+    <li><strong><span style="color: #61afef;">mob_spawn</span></strong> (slot 8) &mdash; NPC/mob spawning (4 interceptors: marker, chunk, NPC, entity load)</li>
+    <li><strong><span style="color: #61afef;">respawn</span></strong> (slot 22) &mdash; Player respawn location override (returns coordinates, not verdict)</li>
+</ul>
+
+<h3><span style="color: #e5c07b;">Transport (3 hooks)</span></h3>
+<ul>
+    <li><strong><span style="color: #61afef;">teleporter</span></strong> (slot 9) &mdash; Teleporter block use</li>
+    <li><strong><span style="color: #61afef;">portal</span></strong> (slot 10) &mdash; All portal and instance interactions (6 interceptors)</li>
+    <li><strong><span style="color: #61afef;">seat</span></strong> (slot 21) &mdash; Block seating (chairs, benches)</li>
+</ul>
+
+<h3><span style="color: #abb2bf;">Commands &amp; Logging (2 hooks)</span></h3>
+<ul>
+    <li><strong><span style="color: #61afef;">command</span></strong> (slot 11) &mdash; Command execution filtering</li>
+    <li><strong><span style="color: #61afef;">interaction_log</span></strong> (slot 12) &mdash; Desync log suppression</li>
+</ul>
+<p>&nbsp;</p>
+
+<h2><span style="color: #98c379;">Architecture</span></h2>
+<h3>Bridge Design</h3>
+<p>The bridge is a 24-element <code>AtomicReferenceArray&lt;Object&gt;</code> stored in <code>System.getProperties()</code> under <code>"hyperprotect.bridge"</code>. Consumer mods place hook objects at fixed slot indices; interceptors read from those slots at runtime via cached <code>MethodHandle</code> lookups.</p>
+
+<h3>Verdict Protocol</h3>
+<table>
+    <thead>
+    <tr>
+        <th>Value</th>
+        <th>Name</th>
+        <th>Behavior</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td><code>0</code></td>
+        <td>ALLOW</td>
+        <td>Action proceeds normally</td>
+    </tr>
+    <tr>
+        <td><code>1</code></td>
+        <td>DENY_WITH_MESSAGE</td>
+        <td>Blocked; calls <code>fetch*DenyReason()</code> and sends formatted message</td>
+    </tr>
+    <tr>
+        <td><code>2</code></td>
+        <td>DENY_SILENT</td>
+        <td>Blocked, no message</td>
+    </tr>
+    <tr>
+        <td><code>3</code></td>
+        <td>DENY_MOD_HANDLES</td>
+        <td>Blocked, consumer mod handles messaging</td>
+    </tr>
+    <tr>
+        <td>negative</td>
+        <td>ALLOW</td>
+        <td>Fail-open safety</td>
+    </tr>
+    </tbody>
+</table>
+
+<h3>Feature Detection</h3>
+<p>Each interceptor sets a system property on load. Consumer mods can check exactly which hooks are available:</p>
+<pre>boolean loaded = "true".equals(System.getProperty("hyperprotect.bridge.active"));
+boolean hasBlockBreak = "true".equals(System.getProperty("hyperprotect.intercept.block_break"));</pre>
+<p>&nbsp;</p>
+
+<h2><span style="color: #5b8def;">For Server Admins</span></h2>
+<ol>
+    <li>Create an <code>earlyplugins/</code> folder in your server directory</li>
+    <li>Place <a href="https://www.curseforge.com/hytale/mods/hyxin" rel="nofollow">Hyxin</a> and <strong>HyperProtect-Mixin</strong> JARs in <code>earlyplugins/</code> (NOT mods/)</li>
+    <li>Add <code>--accept-early-plugins</code> to your server start script</li>
+    <li>Place your protection mod (e.g., <a href="https://www.curseforge.com/hytale/mods/hyperfactions" rel="nofollow">HyperFactions</a>) in <code>mods/</code></li>
+</ol>
+<p><strong>Linux:</strong></p>
+<pre>DEFAULT_ARGS="--accept-early-plugins --assets ../Assets.zip"</pre>
+<p><strong>Windows:</strong></p>
+<pre>set DEFAULT_ARGS=--accept-early-plugins --assets ../Assets.zip</pre>
+<p><span style="color: #98c379;"><strong>That's it.</strong> Zero configuration required. HyperProtect-Mixin auto-initializes and consumer mods register hooks automatically.</span></p>
+<p>&nbsp;</p>
+
+<h2><span style="color: #c678dd;">For Developers</span></h2>
+<p>Register hooks with no compile-time dependency:</p>
+<pre>@SuppressWarnings("unchecked")
+AtomicReferenceArray&lt;Object&gt; bridge = (AtomicReferenceArray&lt;Object&gt;)
+    System.getProperties().get("hyperprotect.bridge");
+
+// Register a block break hook at slot 0
+bridge.set(0, new Object() {
+    public int evaluate(UUID playerUuid, String worldName, int x, int y, int z) {
+        if (isProtected(worldName, x, y, z)) return 1; // DENY_WITH_MESSAGE
+        return 0; // ALLOW
+    }
+
+    public String fetchDenyReason(UUID playerUuid, String worldName, int x, int y, int z) {
+        return "&amp;#FF5555You cannot break blocks here!";
+    }
+});</pre>
+<p>See the <a href="https://github.com/HyperSystemsDev/HyperProtect-Mixin/tree/main/docs" rel="nofollow">full documentation</a> for all 20 hook signatures and integration patterns.</p>
+<p>&nbsp;</p>
+
+<h2><span style="color: #61afef;">Integration</span></h2>
+<ul>
+    <li><strong><a href="https://www.curseforge.com/hytale/mods/hyperfactions" rel="nofollow">HyperFactions</a></strong> &mdash; Primary consumer. Uses all 20 hooks for territory protection, PvP control, keep inventory, spawn blocking, and more.</li>
+    <li><strong>Any mod</strong> &mdash; The bridge API is open. Any mod can register hooks at any slot to implement custom protection logic.</li>
+</ul>
+<p>&nbsp;</p>
+
+<h2><span style="color: #56b6c2;">Requirements</span></h2>
+<ul>
+    <li>Hytale Server (Early Access)</li>
+    <li><a href="https://www.curseforge.com/hytale/mods/hyxin" rel="nofollow">Hyxin</a> (v0.0.11+) &mdash; Mixin framework for Hytale</li>
+    <li><code>--accept-early-plugins</code> server flag</li>
+</ul>
+<p>&nbsp;</p>
+
+<h2>Links</h2>
+<ul>
+    <li><a href="https://www.hypersystems.dev/" rel="nofollow">HyperSystems Website</a></li>
+    <li><a href="https://github.com/HyperSystemsDev/HyperProtect-Mixin" rel="nofollow">GitHub Repository</a></li>
+    <li><a href="https://github.com/HyperSystemsDev/HyperProtect-Mixin/tree/main/docs" rel="nofollow">Documentation</a></li>
+    <li><a href="https://github.com/HyperSystemsDev/HyperProtect-Mixin/issues" rel="nofollow">Issue Tracker</a></li>
+    <li><a href="https://discord.gg/SNPjyfkYPc" rel="nofollow">Discord</a></li>
+</ul>
+<p>&nbsp;</p>
+<p><em>Part of the <a href="https://www.hypersystems.dev/" rel="nofollow">HyperSystems</a> suite &mdash; built for Hytale, open source, and actively maintained.</em></p>

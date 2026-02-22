@@ -1,0 +1,17 @@
+{
+  "Group": "com.hyperprotect",
+  "Name": "HyperProtect-Mixin",
+  "Version": "1.0.0",
+  "Description": "Generic server protection hooks via Hyxin mixins — any mod can register hook handlers",
+  "Authors": [{"Name": "HyperSystems"}],
+  "ServerVersion": "*",
+  "Dependencies": {},
+  "OptionalDependencies": {},
+  "DisabledByDefault": false,
+  "Main": "com.hyperprotect.mixin.HyperProtectMixinPlugin",
+  "Hyxin": {
+    "Configs": [
+      "hyperprotect.mixin.json"
+    ]
+  }
+}

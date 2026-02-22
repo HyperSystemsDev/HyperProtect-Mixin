@@ -1,0 +1,41 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.hyperprotect.mixin.intercept",
+  "mixins": [
+    "building.HarvestInterceptor",
+    "building.ExplosionInterceptor",
+    "building.BlockPlaceInterceptor",
+    "building.FlameTickInterceptor",
+    "building.PasteInterceptor",
+    "items.ProximityLootInterceptor",
+    "items.DeathLootInterceptor",
+    "items.WearInterceptor",
+    "containers.BenchPositionCapture",
+    "containers.CraftingGateInterceptor",
+    "containers.ContainerOpenInterceptor",
+    "combat.EntityDamageInterceptor",
+    "entities.MarkerSpawnGate",
+    "entities.ChunkSpawnGate",
+    "entities.NpcAdditionGate",
+    "entities.EntityLoadGate",
+    "transport.TeleporterInterceptor",
+    "transport.PortalGateEntry",
+    "transport.PortalGateReturn",
+    "transport.InstanceConfigGate",
+    "transport.InstanceJumpGate",
+    "transport.InstanceLeaveGate",
+    "transport.HubGate",
+    "commands.CommandGateInterceptor",
+    "building.HammerInterceptor",
+    "building.UseInterceptor",
+    "transport.SeatInterceptor",
+    "entities.RespawnInterceptor",
+    "logging.SpawnLogFilter",
+    "logging.EntryDesyncFilter",
+    "logging.ChainDesyncFilter"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
