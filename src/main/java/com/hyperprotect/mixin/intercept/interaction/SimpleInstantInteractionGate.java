@@ -109,6 +109,7 @@ public abstract class SimpleInstantInteractionGate {
         long count = faultCount.incrementAndGet();
         if (count == 1 || count % 100 == 0) {
             System.err.println("[HyperProtect] SimpleInstantInteractionGate error #" + count + ": " + t);
+            t.printStackTrace(System.err);
         }
     }
 

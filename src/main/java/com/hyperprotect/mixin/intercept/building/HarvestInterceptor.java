@@ -134,6 +134,7 @@ public abstract class HarvestInterceptor {
         long count = faultCount.incrementAndGet();
         if (count == 1 || count % 100 == 0) {
             System.err.println("[HyperProtect] HarvestInterceptor error #" + count + ": " + t);
+            t.printStackTrace(System.err);
         }
     }
 

@@ -63,6 +63,7 @@ public abstract class WearInterceptor {
         long count = faultCount.incrementAndGet();
         if (count == 1 || count % 100 == 0) {
             System.err.println("[HyperProtect] WearInterceptor error #" + count + ": " + t);
+            t.printStackTrace(System.err);
         }
     }
 

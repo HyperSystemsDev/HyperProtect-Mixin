@@ -67,6 +67,7 @@ public abstract class PasteInterceptor {
         long count = faultCount.incrementAndGet();
         if (count == 1 || count % 100 == 0) {
             System.err.println("[HyperProtect] PasteInterceptor error #" + count + ": " + t);
+            t.printStackTrace(System.err);
         }
     }
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- All 21 interceptors now log full stack traces on error (previously only printed exception class and message), making it possible to identify the exact line causing faults
+
 ## [1.0.0] - 2026-02-22
 
 ### Added
