@@ -45,10 +45,11 @@ public class HyperProtectMixinPlugin extends JavaPlugin {
 
         // Mark bridge as active with version for updater detection
         System.setProperty("hyperprotect.bridge.active", "true");
-        System.setProperty("hyperprotect.bridge.version", "1.0.0");
+        String version = getClass().getPackage().getImplementationVersion();
+        System.setProperty("hyperprotect.bridge.version", version != null ? version : "unknown");
 
         // Determine operating mode based on OrbisGuard detection from HyperProtectConfigPlugin.
-        // When OG is present, HP only keeps 5 unique mixins and OG handles the rest.
+        // When OG is present, HP only keeps 6 unique mixins and OG handles the rest.
         boolean compatMode = HyperProtectConfigPlugin.isOrbisGuardDetected();
         System.setProperty("hyperprotect.mode", compatMode ? "compatible" : "standalone");
 
@@ -57,9 +58,10 @@ public class HyperProtectMixinPlugin extends JavaPlugin {
         // only run when the target game class is first loaded — which is AFTER plugin setup.
         // Without pre-declaration, isFeatureAvailable() checks return false and hooks aren't registered.
         if (compatMode) {
-            // Compatible mode: only declare features from the 5 unique HP mixins
+            // Compatible mode: only declare features from the 6 unique HP mixins
             // SimpleBlockInteractionGate covers: use, hammer, seat, container_open, teleporter, portal, crop_harvest
-            // SimpleInstantInteractionGate covers: interaction_log (ChangeState etc.)
+            // SimpleInstantInteractionGate covers: interaction_log, npc_use, npc_contextual_use
+            // CaptureCrateGate covers: capture_crate_entity
             // BlockPlaceInterceptor covers: block_place
             // EntityDamageInterceptor covers: entity_damage
             // RespawnInterceptor covers: respawn
@@ -76,6 +78,9 @@ public class HyperProtectMixinPlugin extends JavaPlugin {
             System.setProperty("hyperprotect.intercept.crop_harvest", "true");
             System.setProperty("hyperprotect.intercept.seat", "true");
             System.setProperty("hyperprotect.intercept.respawn", "true");
+            System.setProperty("hyperprotect.intercept.capture_crate_entity", "true");
+            System.setProperty("hyperprotect.intercept.npc_use", "true");
+            System.setProperty("hyperprotect.intercept.npc_contextual_use", "true");
         } else {
             // Standalone mode: declare all features
             System.setProperty("hyperprotect.intercept.block_break", "true");
@@ -108,18 +113,22 @@ public class HyperProtectMixinPlugin extends JavaPlugin {
             System.setProperty("hyperprotect.intercept.crop_harvest", "true");
             System.setProperty("hyperprotect.intercept.seat", "true");
             System.setProperty("hyperprotect.intercept.respawn", "true");
+            System.setProperty("hyperprotect.intercept.capture_crate_entity", "true");
+            System.setProperty("hyperprotect.intercept.npc_use", "true");
+            System.setProperty("hyperprotect.intercept.npc_contextual_use", "true");
         }
 
         if (compatMode) {
             getLogger().at(Level.INFO).log("HyperProtect-Mixin loaded! (COMPATIBLE mode — OrbisGuard detected)");
             getLogger().at(Level.INFO).log("Active HP hooks: block-place, entity-damage, container-open, " +
-                    "use, hammer, seat, teleporter, portal, respawn, crop-harvest, interaction-log");
+                    "use, hammer, seat, teleporter, portal, respawn, crop-harvest, " +
+                    "capture-crate, npc-use, interaction-log");
         } else {
             getLogger().at(Level.INFO).log("HyperProtect-Mixin loaded! (STANDALONE mode)");
             getLogger().at(Level.INFO).log("Protection hooks: block-break, block-place, explosion, entity-damage, " +
                     "auto-pickup, fire-spread, command, builder-tools, death-drop, durability, " +
                     "container-access, container-open, mob-spawn, teleporter, portal, " +
-                    "hammer, use, seat, respawn, crop-harvest, interaction-log");
+                    "hammer, use, seat, respawn, crop-harvest, capture-crate, npc-use, interaction-log");
         }
     }
 }

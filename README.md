@@ -5,7 +5,7 @@
 
 Server-level event interception via Hyxin mixins for Hytale. Provides a lock-free bridge API that any mod can use to intercept and control server actions — no compile-time dependency required.
 
-**Version:** 1.0.0
+**Version:** 1.1.0
 **Platform:** Hytale Early Access
 **Type:** Hyxin Early Plugin
 **License:** GPLv3
@@ -196,7 +196,7 @@ HyperProtect-Mixin requires **zero configuration**. It auto-detects and initiali
 | Property | Value | Purpose |
 |----------|-------|---------|
 | `hyperprotect.bridge.active` | `"true"` | Bridge initialized |
-| `hyperprotect.bridge.version` | `"1.0.0"` | Bridge version |
+| `hyperprotect.bridge.version` | `"1.1.0"` | Bridge version |
 | `hyperprotect.mode` | `"standalone"` or `"compatible"` | Operating mode (compatible when OrbisGuard-Mixins detected) |
 | `hyperprotect.intercept.*` | `"true"` | Per-interceptor load confirmation |
 
@@ -215,7 +215,7 @@ See [docs/feature-detection.md](docs/feature-detection.md) for the full list.
 ./gradlew jar
 ```
 
-Output: `build/libs/HyperProtect-Mixin-1.0.0.jar`
+Output: `build/libs/HyperProtect-Mixin-1.1.0.jar`
 
 ---
 

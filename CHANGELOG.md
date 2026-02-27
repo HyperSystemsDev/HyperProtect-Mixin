@@ -7,11 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+*No changes yet*
+
+## [1.1.0] - 2026-02-26
+
+**Server Version:** `2026.02.19-1a311a592`
+
 ### Added
 - **CaptureCrateGate** — new mixin interceptor for entity capture via UseCaptureCrateInteraction. Redirects `getTargetEntity()` in tick0() to check protection before allowing animal pickup. Uses bridge slot 20 (evaluateUse)
 - **NPC tame/use interception** — added UseNPCInteraction and ContextualUseNPCInteraction to SimpleInstantInteractionGate HOOK_DEFS (slot 20, evaluateUse)
 - CaptureCrateGate added to SAFE_MIXINS in HyperProtectConfigPlugin (6 unique mixins, was 5)
 - System properties: `hyperprotect.intercept.capture_crate_entity`, `hyperprotect.intercept.npc_use`, `hyperprotect.intercept.npc_contextual_use`
+- Pre-declared new interceptor properties in both standalone and compatible modes
+
+### Changed
+- Bridge version (`hyperprotect.bridge.version`) now read dynamically from JAR manifest `Implementation-Version` instead of hardcoded string
 
 ### Fixed
 - All 22 interceptors now log full stack traces on error (previously only printed exception class and message), making it possible to identify the exact line causing faults
