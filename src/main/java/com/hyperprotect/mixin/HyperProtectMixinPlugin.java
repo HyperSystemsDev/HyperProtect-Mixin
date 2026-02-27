@@ -45,8 +45,8 @@ public class HyperProtectMixinPlugin extends JavaPlugin {
 
         // Mark bridge as active with version for updater detection
         System.setProperty("hyperprotect.bridge.active", "true");
-        String version = getClass().getPackage().getImplementationVersion();
-        System.setProperty("hyperprotect.bridge.version", version != null ? version : "unknown");
+        String version = getManifest().getVersion().toString();
+        System.setProperty("hyperprotect.bridge.version", version);
 
         // Determine operating mode based on OrbisGuard detection from HyperProtectConfigPlugin.
         // When OG is present, HP only keeps 6 unique mixins and OG handles the rest.
