@@ -22,7 +22,7 @@ When a protected action occurs (block break, explosion, PvP hit, portal use, etc
 
 | | HyperProtect-Mixin | OrbisGuard-Mixins |
 |---|---|---|
-| **Hook count** | 20 hooks (22 interceptors) | 11 hooks |
+| **Hook count** | 20 hooks (23 interceptors) | 11 hooks |
 | **Bridge type** | `AtomicReferenceArray` (lock-free reads) | `ConcurrentHashMap` (lock contention) |
 | **Safety model** | Fail-open (errors allow actions) | Varies |
 | **Bypass handling** | Hook decides (no coupling to permissions) | Mixin checks permissions |
@@ -68,7 +68,7 @@ Protection hooks: block-break, block-place, explosion, entity-damage, ...
 ```
 1. Server starts → Hyxin loads HyperProtect-Mixin as an early plugin
 2. Plugin creates AtomicReferenceArray<Object>(24) in System.getProperties()
-3. Hyxin injects 22 mixin interceptors into server bytecode
+3. Hyxin injects 23 mixin interceptors into server bytecode
 4. Consumer mod (e.g., HyperFactions) places hook objects at slot indices
 5. Server event fires → interceptor reads hook from bridge → calls evaluate() → acts on verdict
 ```
@@ -99,7 +99,7 @@ All hooks return `int` verdicts (except `respawn` which returns `double[]` coord
 | 3 | `builder_tools` | Builder tool paste operations |
 | 18 | `block_place` | Block placement |
 | 19 | `hammer` | Hammer block cycling (CycleBlockGroupInteraction) |
-| 20 | `use` | Block state changes and interactions |
+| 20 | `use` | Block state changes, entity capture, and NPC interactions |
 
 ### Items (3 hooks)
 

@@ -2,7 +2,7 @@
 
 ## What is HyperProtect-Mixin?
 
-HyperProtect-Mixin is a generic server protection hook framework for Hytale. It uses Hyxin mixins to inject 22 interceptors providing 20 protection hooks across building, combat, items, entities, containers, transport, commands, and logging.
+HyperProtect-Mixin is a generic server protection hook framework for Hytale. It uses Hyxin mixins to inject 23 interceptors providing 20 protection hooks across building, combat, items, entities, containers, transport, commands, and logging.
 
 **Any mod** can register hook handlers to control these actions — no compile-time dependency needed.
 

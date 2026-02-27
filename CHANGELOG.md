@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - System properties: `hyperprotect.intercept.capture_crate_entity`, `hyperprotect.intercept.npc_use`, `hyperprotect.intercept.npc_contextual_use`
 
 ### Fixed
-- All 21 interceptors now log full stack traces on error (previously only printed exception class and message), making it possible to identify the exact line causing faults
+- All 22 interceptors now log full stack traces on error (previously only printed exception class and message), making it possible to identify the exact line causing faults
 
 ## [1.0.0] - 2026-02-22
 

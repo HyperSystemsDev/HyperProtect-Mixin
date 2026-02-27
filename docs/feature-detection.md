@@ -14,7 +14,7 @@ Each mixin interceptor sets system properties on load. These are also pre-declar
 
 ### Per-Interceptor Properties
 
-Properties are organized by the mixin class that sets them. In standalone mode, all properties are set. In compatible mode (OrbisGuard detected), only properties from the 5 unique HP mixins are pre-declared.
+Properties are organized by the mixin class that sets them. In standalone mode, all properties are set. In compatible mode (OrbisGuard detected), only properties from the 6 unique HP mixins are pre-declared.
 
 #### Standalone Interceptors (dedicated mixin classes)
 
@@ -40,6 +40,7 @@ Properties are organized by the mixin class that sets them. In standalone mode, 
 | `hyperprotect.intercept.entity_damage` | EntityDamageInterceptor | `entity_damage` (16) |
 | `hyperprotect.intercept.block_place` | BlockPlaceInterceptor | `block_place` (18) |
 | `hyperprotect.intercept.respawn` | RespawnInterceptor | `respawn` (22) |
+| `hyperprotect.intercept.capture_crate_entity` | CaptureCrateGate | `use` (20) |
 
 #### SimpleBlockInteractionGate (consolidated — 20 interaction types)
 
@@ -68,7 +69,7 @@ All set by `SimpleBlockInteractionGate` which intercepts `SimpleBlockInteraction
 | `hyperprotect.intercept.processing_bench` | OpenProcessingBenchInteraction | `container_open` (17) |
 | `hyperprotect.intercept.bench_page` | OpenBenchPageInteraction | `container_open` (17) |
 
-#### SimpleInstantInteractionGate (consolidated — 4 interaction types)
+#### SimpleInstantInteractionGate (consolidated — 6 interaction types)
 
 All set by `SimpleInstantInteractionGate` which intercepts `SimpleInstantInteraction.interact()`:
 
@@ -78,6 +79,8 @@ All set by `SimpleInstantInteractionGate` which intercepts `SimpleInstantInterac
 | `hyperprotect.intercept.instance_exit` | ExitInstanceInteraction | `portal` (10) |
 | `hyperprotect.intercept.hub_portal` | HubPortalInteraction | `portal` (10) |
 | `hyperprotect.intercept.item_pickup_manual` | ManualItemPickupInteraction | `item_pickup` (4) |
+| `hyperprotect.intercept.npc_use` | UseNPCInteraction | `use` (20) |
+| `hyperprotect.intercept.npc_contextual_use` | ContextualUseNPCInteraction | `use` (20) |
 
 ## Usage
 
@@ -98,17 +101,18 @@ String mode = System.getProperty("hyperprotect.mode"); // "standalone" or "compa
 
 ## OrbisGuard Compatibility Mode
 
-When OrbisGuard-Mixins is detected in `earlyplugins/`, `HyperProtectConfigPlugin` disables 17 conflicting HP mixins, keeping only 5 unique mixin classes active:
+When OrbisGuard-Mixins is detected in `earlyplugins/`, `HyperProtectConfigPlugin` disables 17 conflicting HP mixins, keeping only 6 unique mixin classes active:
 
 | Active Mixin | Coverage |
 |-------------|----------|
 | `SimpleBlockInteractionGate` | use, hammer, seat, container_open, teleporter, portal (block), farming |
-| `SimpleInstantInteractionGate` | portal (instant), hub, instance teleport/exit, manual item pickup |
+| `SimpleInstantInteractionGate` | portal (instant), hub, instance teleport/exit, manual item pickup, NPC use |
+| `CaptureCrateGate` | entity capture (capture crate pickup) |
 | `BlockPlaceInterceptor` | block_place |
 | `EntityDamageInterceptor` | entity_damage |
 | `RespawnInterceptor` | respawn |
 
-In compatible mode, only the properties from these 5 classes are pre-declared.
+In compatible mode, only the properties from these 6 classes are pre-declared.
 
 ## Spawn Startup Behavior
 

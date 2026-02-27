@@ -125,9 +125,10 @@ Intercepts block state changes, entity capture, and NPC interactions — any blo
 Position is the target block or entity position.
 
 **Interaction routing:** Consumer mods can read the interaction class name from `hyperprotect.context.interaction` to distinguish between block use, crate pickup, crate placement, and NPC taming. For example:
-- `"entity-capture"` → capture crate pickup (animal being caught)
-- `"UseCaptureCrateInteraction"` → capture crate placement (animal being released)
-- `"UseNPCInteraction"` / `"ContextualUseNPCInteraction"` → NPC tame/use
+- `"UseCaptureCrateInteraction(entity-capture)"` → capture crate pickup (animal being caught, via `CaptureCrateGate`)
+- `"com.hypixel.hytale.builtin.adventure.farming.interactions.UseCaptureCrateInteraction"` → capture crate placement (animal being released, via `SimpleBlockInteractionGate`)
+- `"com.hypixel.hytale.server.npc.interactions.UseNPCInteraction"` → NPC taming/use (via `SimpleInstantInteractionGate`)
+- `"com.hypixel.hytale.server.npc.interactions.ContextualUseNPCInteraction"` → contextual NPC interactions (via `SimpleInstantInteractionGate`)
 
 **Use cases:** Prevent outsiders from interacting with blocks, picking up/placing animals, or taming NPCs in claimed territory. Protect farming operations and interactive blocks.
 
