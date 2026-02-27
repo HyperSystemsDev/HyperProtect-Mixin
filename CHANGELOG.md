@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-declared new interceptor properties in both standalone and compatible modes
 
 ### Changed
-- Bridge version (`hyperprotect.bridge.version`) now read from plugin `manifest.json` via `getManifest().getVersion()` — Hyxin's classloader doesn't propagate JAR manifest attributes to `Package` objects, so `getPackage().getImplementationVersion()` always returned null
+- Bridge version (`hyperprotect.bridge.version`) now uses build-generated `BuildInfo.VERSION` constant — neither `getPackage().getImplementationVersion()` (JAR manifest) nor `getManifest().getVersion()` (plugin manifest) work reliably under Hyxin's early plugin classloader
 
 ### Fixed
 - All 22 interceptors now log full stack traces on error (previously only printed exception class and message), making it possible to identify the exact line causing faults
