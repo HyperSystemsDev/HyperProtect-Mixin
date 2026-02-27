@@ -25,12 +25,13 @@ public class HyperProtectConfigPlugin implements IMixinConfigPlugin {
     private static volatile boolean ogDetected = false;
 
     /**
-     * The 5 mixin classes that have NO OrbisGuard equivalent and must always apply.
+     * The 6 mixin classes that have NO OrbisGuard equivalent and must always apply.
      * All other HP mixins conflict with OG and are disabled when OG is present.
      */
     private static final Set<String> SAFE_MIXINS = Set.of(
             "com.hyperprotect.mixin.intercept.interaction.SimpleBlockInteractionGate",
             "com.hyperprotect.mixin.intercept.interaction.SimpleInstantInteractionGate",
+            "com.hyperprotect.mixin.intercept.interaction.CaptureCrateGate",
             "com.hyperprotect.mixin.intercept.combat.EntityDamageInterceptor",
             "com.hyperprotect.mixin.intercept.building.BlockPlaceInterceptor",
             "com.hyperprotect.mixin.intercept.entities.RespawnInterceptor"
@@ -42,7 +43,7 @@ public class HyperProtectConfigPlugin implements IMixinConfigPlugin {
 
         if (ogDetected) {
             System.out.println("[HyperProtect] OrbisGuard-Mixins detected in earlyplugins/ — "
-                    + "disabling 17 conflicting mixins, keeping 5 unique mixins");
+                    + "disabling 17 conflicting mixins, keeping 6 unique mixins");
         } else {
             System.out.println("[HyperProtect] OrbisGuard-Mixins not detected — all mixins active");
         }

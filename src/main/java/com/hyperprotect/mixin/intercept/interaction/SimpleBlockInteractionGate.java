@@ -278,6 +278,9 @@ public abstract class SimpleBlockInteractionGate {
                         int y = targetBlock.getY();
                         int z = targetBlock.getZ();
 
+                        // Pass interaction class name to hook for debug logging
+                        System.getProperties().put("hyperprotect.context.interaction", className);
+
                         int verdict = (int) ((MethodHandle) hook[1]).invoke(
                                 hook[0], playerUuid, worldName, x, y, z);
 

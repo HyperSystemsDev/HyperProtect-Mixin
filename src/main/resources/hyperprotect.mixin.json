@@ -23,6 +23,7 @@
     "commands.CommandGateInterceptor",
     "interaction.SimpleBlockInteractionGate",
     "interaction.SimpleInstantInteractionGate",
+    "interaction.CaptureCrateGate",
     "logging.SpawnLogFilter",
     "logging.EntryDesyncFilter",
     "logging.ChainDesyncFilter"

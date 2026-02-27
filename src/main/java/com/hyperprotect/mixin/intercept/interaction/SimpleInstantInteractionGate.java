@@ -80,12 +80,21 @@ public abstract class SimpleInstantInteractionGate {
                 new Object[] { 10, "evaluateGateway", "fetchGatewayDenyReason", false });
         map.put("com.hypixel.hytale.builtin.buildertools.interactions.PickupItemInteraction",
                 new Object[] { 4, "evaluate", null, true });
+
+        // === NPC interactions (F-key tame, contextual NPC use) ===
+        map.put("com.hypixel.hytale.server.npc.interactions.UseNPCInteraction",
+                new Object[] { 20, "evaluateUse", "fetchUseDenyReason", false });
+        map.put("com.hypixel.hytale.server.npc.interactions.ContextualUseNPCInteraction",
+                new Object[] { 20, "evaluateUse", "fetchUseDenyReason", false });
+
         HOOK_DEFS = map;
 
         System.setProperty("hyperprotect.intercept.instance_teleport", "true");
         System.setProperty("hyperprotect.intercept.instance_exit", "true");
         System.setProperty("hyperprotect.intercept.hub_portal", "true");
         System.setProperty("hyperprotect.intercept.item_pickup_manual", "true");
+        System.setProperty("hyperprotect.intercept.npc_use", "true");
+        System.setProperty("hyperprotect.intercept.npc_contextual_use", "true");
     }
 
     @Shadow
@@ -205,6 +214,10 @@ public abstract class SimpleInstantInteractionGate {
                                 Vector3d pos = transform.getPosition();
                                 UUID playerUuid = playerRef.getUuid();
                                 String worldName = world.getName();
+
+                                // Pass interaction class name to hook for debug logging
+                                System.getProperties().put("hyperprotect.context.interaction",
+                                        self.getClass().getName());
 
                                 boolean useDoubles = (boolean) hook[3];
                                 int verdict;

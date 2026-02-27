@@ -98,7 +98,7 @@ Intercepts hammer block cycling (variant rotation).
 
 ### Slot 20: `use`
 
-Intercepts block state changes — any block with toggleable or interactive state.
+Intercepts block state changes, entity capture, and NPC interactions — any block/entity with toggleable, interactive, or capturable state.
 
 | Method | Signature | Return |
 |--------|-----------|--------|
@@ -112,12 +112,24 @@ Intercepts block state changes — any block with toggleable or interactive stat
 - `ChangeFarmingStageInteraction` — Farming stage changes
 - `FertilizeSoilInteraction` — Soil fertilization
 - `UseWateringCanInteraction` — Watering can use
-- `UseCaptureCrateInteraction` — Capture crate use
+- `UseCaptureCrateInteraction` — Capture crate placement (releasing animal)
 - `UseCoopInteraction` — Animal coop use
 
-Position is the target block.
+**Intercepted actions** (via `CaptureCrateGate`):
+- Entity capture via `UseCaptureCrateInteraction.tick0()` — picking up animals with capture crate. Sets interaction context to `"entity-capture"` to distinguish from crate placement.
 
-**Use cases:** Prevent outsiders from interacting with blocks in claimed territory. Protect farming operations and interactive blocks.
+**Intercepted actions** (via `SimpleInstantInteractionGate`):
+- `UseNPCInteraction` — F-key NPC taming/use
+- `ContextualUseNPCInteraction` — Contextual NPC interactions (shop, quest, dialogue)
+
+Position is the target block or entity position.
+
+**Interaction routing:** Consumer mods can read the interaction class name from `hyperprotect.context.interaction` to distinguish between block use, crate pickup, crate placement, and NPC taming. For example:
+- `"entity-capture"` → capture crate pickup (animal being caught)
+- `"UseCaptureCrateInteraction"` → capture crate placement (animal being released)
+- `"UseNPCInteraction"` / `"ContextualUseNPCInteraction"` → NPC tame/use
+
+**Use cases:** Prevent outsiders from interacting with blocks, picking up/placing animals, or taming NPCs in claimed territory. Protect farming operations and interactive blocks.
 
 ---
 
